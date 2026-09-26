@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#c084fc">
+<title>Team Hub</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+*{-webkit-tap-highlight-color:transparent;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;overscroll-behavior:none;margin:0;background:#faf5ff}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+@keyframes float1{0%,100%{transform:translate(0,0)}50%{transform:translate(5px,-10px)}}
+@keyframes float2{0%,100%{transform:translate(0,0)}50%{transform:translate(-8px,-6px)}}
+@keyframes float3{0%,100%{transform:translate(0,0)}50%{transform:translate(4px,8px)}}
+@keyframes bounce2{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
+@keyframes toastIn{0%{opacity:0;transform:translate(-50%,16px)}10%{opacity:1;transform:translate(-50%,0)}85%{opacity:1}100%{opacity:0;transform:translate(-50%,-8px)}}
+@keyframes pulseDot{0%,100%{transform:scale(1);opacity:.6}50%{transform:scale(1.3);opacity:1}}
+@keyframes marquee{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+.fade-in{animation:fadeIn .35s ease-out both}
+.slide-up{animation:slideUp .3s ease-out}
+.float1{animation:float1 4s ease-in-out infinite}
+.float2{animation:float2 5s ease-in-out infinite}
+.float3{animation:float3 3.5s ease-in-out infinite}
+.anim-bounce{animation:bounce2 1s ease infinite}
+.toast-anim{animation:toastIn 2.5s ease both}
+.pulse-dot{animation:pulseDot 2s ease-in-out infinite}
+.card-tap{transition:transform .12s ease}.card-tap:active{transform:scale(.92)}
+.modal-bg{background:rgba(100,50,120,.3);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.marquee-wrap{overflow:hidden;white-space:nowrap}
+.marquee-track{display:inline-flex;white-space:nowrap;will-change:transform}
+.marquee-track.running{animation:marquee var(--dur,20s) linear infinite}
+.marquee-track:hover,.marquee-track:active{animation-play-state:paused}
+input,select,textarea{font-family:inherit;font-size:16px}
+input:focus,select:focus,textarea:focus{outline:none}
+::-webkit-scrollbar{width:0;height:0}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const API_URL='';
+
+const GRADS={
+  lavender:{bg:'linear-gradient(135deg,#a78bfa,#c4b5fd)',l:'薰衣草'},
+  sky:{bg:'linear-gradient(135deg,#7dd3fc,#93c5fd)',l:'天藍'},
+  mint:{bg:'linear-gradient(135deg,#34d399,#6ee7b7)',l:'薄荷'},
+  peach:{bg:'linear-gradient(135deg,#fda4af,#fb7185)',l:'蜜桃'},
+  sunshine:{bg:'linear-gradient(135deg,#fcd34d,#fbbf24)',l:'陽光'},
+  lilac:{bg:'linear-gradient(135deg,#c084fc,#a855f7)',l:'丁香'},
+  ocean:{bg:'linear-gradient(135deg,#38bdf8,#22d3ee)',l:'海洋'},
+  rose:{bg:'linear-gradient(135deg,#f472b6,#ec4899)',l:'玫瑰'},
+  coral:{bg:'linear-gradient(135deg,#fb923c,#f97316)',l:'珊瑚'},
+  forest:{bg:'linear-gradient(135deg,#4ade80,#22c55e)',l:'森林'}
+};
+const EMOJIS=['📝','📊','📋','📅','🧑‍💼','👤','💰','🎯','📸','⚙️','📆','🏆','📈','💡','🔧','📌','🎨','📱','💼','🗂️','📂','🔗','🏠','📮','🛒','🎫','📖','🔍','✅','🎬','📷','🖥️','🔔','💬','🗺️','🎉','⭐','🚀','🔥','🎪','🌸','🦋','☕','🧸','🎵','🌈','💜','🍰'];
+const CATS=['表單','數據','工具','其他'];
+const NTYPES=[
+  {key:'important',emoji:'📌',label:'重要',bg:'#fff1f2',bdr:'#fb7185',txt:'#be123c',pill:'#fda4af'},
+  {key:'reminder',emoji:'🔔',label:'提醒',bg:'#fffbeb',bdr:'#fbbf24',txt:'#92400e',pill:'#fcd34d'},
+  {key:'info',emoji:'💡',label:'Tips',bg:'#eff6ff',bdr:'#60a5fa',txt:'#1e40af',pill:'#93c5fd'}
+];
+
+let S={
+  cards:[],notices:[],
+  set:{title:'Team Hub ✨',sub:'撳入去就用到 📱',pwd:''},
+  loaded:false,loading:true,
+  admin:false,view:'main',
+  editModal:null,pwdModal:null,adminPwd:false,delConfirm:null,
+  noticeEdit:null,noticeDel:null,
+  toast:''
+};
+
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+
+async function load(){
+  try{const c=localStorage.getItem('hubCfg4');if(c){const d=JSON.parse(c);S.cards=d.cards||[];S.notices=d.notices||[];S.set={...S.set,...d.set};S.loaded=true;S.loading=false;render();}}catch(e){}
+  if(API_URL){try{const r=await fetch(API_URL+'?action=getHubConfig');const j=await r.json();if(j.success&&j.data){S.cards=j.data.cards||[];S.notices=j.data.notices||[];S.set={...S.set,...j.data.set};cache();}}catch(e){}}
+  S.loaded=true;S.loading=false;render();
+}
+function cache(){try{localStorage.setItem('hubCfg4',JSON.stringify({cards:S.cards,notices:S.notices,set:S.set}));}catch(e){}}
+async function save(){cache();if(!API_URL)return;try{await fetch(API_URL,{method:'POST',body:JSON.stringify({action:'saveHubConfig',data:{cards:S.cards,notices:S.notices,set:S.set}})});}catch(e){console.error(e);}}
+function toast(m){S.toast=m;render();setTimeout(()=>{S.toast='';render();},2400);}
+
+// ═══ MARQUEE SPEED ═══
+function calcDur(count){return Math.max(10, count * 6);}
+
+// ═══ RENDER ═══
+function render(){
+  const a=document.getElementById('app');
+  if(S.loading&&!S.loaded){a.innerHTML=`<div class="min-h-screen flex items-center justify-center" style="background:#faf5ff"><div class="text-center"><div class="text-5xl anim-bounce mb-4">🧸</div><div class="text-lg font-bold text-purple-300">載入緊...</div></div></div>`;return;}
+  let h=S.view==='main'?mainView():settingsView();
+  if(S.pwdModal)h+=pwdModalView();
+  if(S.adminPwd)h+=adminPwdView();
+  if(S.editModal)h+=editModalView();
+  if(S.delConfirm)h+=delModalView();
+  if(S.noticeEdit)h+=noticeEditView();
+  if(S.noticeDel)h+=noticeDelView();
+  if(S.toast)h+=`<div class="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-white text-gray-600 text-sm font-bold px-6 py-3 rounded-2xl shadow-2xl toast-anim border border-purple-100">${S.toast}</div>`;
+  a.innerHTML=h;
+  bindEvents();
+  initMarquee();
+}
+
+function initMarquee(){
+  const track=document.querySelector('.marquee-track');
+  if(!track)return;
+  const an=S.notices.filter(n=>!n.hidden);
+  if(!an.length)return;
+  const dur=calcDur(an.length);
+  track.style.setProperty('--dur',dur+'s');
+  requestAnimationFrame(()=>{track.classList.add('running');});
+}
+
+function mainView(){
+  let h=`<div class="min-h-screen" style="background:#faf5ff">`;
+  // ── Header ──
+  h+=`<div class="relative overflow-hidden" style="background:linear-gradient(135deg,#c084fc,#e879f9,#f9a8d4)">`;
+  h+=`<div class="absolute top-4 right-8 w-14 h-14 rounded-full bg-white opacity-10 float1"></div>`;
+  h+=`<div class="absolute top-20 right-28 w-6 h-6 rounded-full bg-white opacity-15 float2"></div>`;
+  h+=`<div class="absolute bottom-14 left-6 w-10 h-10 rounded-full bg-white opacity-10 float3"></div>`;
+  h+=`<div class="absolute top-10 left-24 w-4 h-4 rounded-full bg-white opacity-10 float2"></div>`;
+  h+=`<div class="relative px-6 pt-14 pb-14"><div class="text-3xl font-black text-white mb-1.5 drop-shadow-sm">${esc(S.set.title)}</div><div class="text-white text-opacity-70 text-sm">${esc(S.set.sub)}</div></div>`;
+  h+=`<svg class="absolute bottom-0 left-0 w-full" viewBox="0 0 1440 40" preserveAspectRatio="none"><path d="M0,20 Q360,42 720,18 T1440,22 L1440,40 L0,40 Z" fill="#faf5ff"/></svg>`;
+  h+=`</div>`;
+
+  // ── Marquee Banner ──
+  const an=S.notices.filter(n=>!n.hidden);
+  if(an.length){
+    h+=`<div class="relative -mt-1" style="background:linear-gradient(135deg,#7c3aed,#9333ea)">`;
+    h+=`<div class="flex items-center">`;
+    // 左邊固定 badge
+    h+=`<div class="shrink-0 flex items-center gap-1.5 px-3 py-2.5 z-10 relative" style="background:linear-gradient(135deg,#7c3aed,#9333ea)"><span class="text-sm">📢</span><span class="text-white text-xs font-bold opacity-80">公告</span><span class="pulse-dot inline-block w-1.5 h-1.5 rounded-full bg-yellow-300"></span><div class="absolute right-0 top-0 bottom-0 w-6" style="background:linear-gradient(to right,#7c3aed,transparent)"></div></div>`;
+    // 跑馬燈
+    h+=`<div class="marquee-wrap flex-1 py-2.5 pr-3">`;
+    h+=`<div class="marquee-track">`;
+    // 重複兩次內容，確保無縫接軌
+    for(let r=0;r<2;r++){
+      an.forEach(n=>{
+        const nt=NTYPES.find(t=>t.key===n.type)||NTYPES[2];
+        h+=`<span class="inline-flex items-center gap-1.5 mx-6">`;
+        h+=`<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold" style="background:${nt.pill};color:${nt.txt}">${nt.emoji} ${nt.label}</span>`;
+        h+=`<span class="text-white text-sm font-medium">${esc(n.text)}</span>`;
+        h+=`<span class="text-white text-opacity-30 mx-3">✦</span>`;
+        h+=`</span>`;
+      });
+    }
+    h+=`</div></div>`;
+    h+=`</div></div>`;
+  }
+
+  h+=`<div class="px-4 pb-28 pt-5 max-w-lg mx-auto">`;
+
+  // ── Cards ──
+  const cats={};S.cards.forEach(c=>{const k=c.cat||'其他';if(!cats[k])cats[k]=[];cats[k].push(c);});
+  const order=['表單','數據','工具','其他'];
+  const sorted=Object.keys(cats).sort((a,b)=>{const ia=order.indexOf(a),ib=order.indexOf(b);return(ia<0?99:ia)-(ib<0?99:ib);});
+
+  if(!S.cards.length&&!an.length){
+    h+=`<div class="text-center py-20 px-6 fade-in"><div class="text-5xl mb-4">🧸</div><div class="text-purple-300 font-bold mb-2">仲未有任何項目</div><div class="text-purple-200 text-sm">撳右下角 ⚙️ 開始設定啦～</div></div>`;
+  } else if(S.cards.length){
+    sorted.forEach(cat=>{
+      const ce=cat==='表單'?'📝':cat==='數據'?'📊':cat==='工具'?'🔧':'📌';
+      h+=`<div class="mb-6 fade-in"><div class="text-xs font-bold text-purple-300 uppercase tracking-wider mb-3 px-1">${ce} ${cat}</div><div class="grid grid-cols-2 gap-3">`;
+      cats[cat].forEach(c=>{
+        const g=(GRADS[c.color]||GRADS.lavender).bg;
+        h+=`<div class="card-tap rounded-3xl p-4 shadow-md cursor-pointer relative overflow-hidden" style="background:${g};min-height:110px" data-a="open" data-id="${c.id}">`;
+        if(c.pwd)h+=`<div class="absolute top-2.5 right-2.5 text-white opacity-50 text-xs">🔒</div>`;
+        h+=`<div class="absolute top-0 right-0 w-16 h-16 rounded-full bg-white opacity-10 -translate-y-5 translate-x-5"></div>`;
+        h+=`<div class="absolute bottom-0 left-0 w-10 h-10 rounded-full bg-white opacity-5 translate-y-4 -translate-x-4"></div>`;
+        h+=`<div class="relative"><div class="text-3xl mb-2 drop-shadow-sm">${c.icon||'📱'}</div><div class="text-white font-bold text-sm leading-tight drop-shadow-sm">${esc(c.name)}</div>`;
+        if(c.desc)h+=`<div class="text-white text-opacity-60 text-xs mt-1 leading-snug">${esc(c.desc)}</div>`;
+        h+=`</div></div>`;
+      });
+      h+=`</div></div>`;
+    });
+  }
+  h+=`</div>`;
+
+  // ── FAB ──
+  h+=`<button data-a="admin" class="fixed bottom-6 right-6 w-14 h-14 rounded-full shadow-2xl flex items-center justify-center text-xl active:scale-90 transition-transform z-40" style="background:linear-gradient(135deg,#c084fc,#e879f9)"><span class="drop-shadow-sm">⚙️</span></button>`;
+  h+=`</div>`;
+  return h;
+}
+
+function settingsView(){
+  let nl='';
+  if(!S.notices.length)nl='<div class="text-center py-6 text-purple-200 text-sm">未有公告 📭</div>';
+  else S.notices.forEach(n=>{
+    const nt=NTYPES.find(t=>t.key===n.type)||NTYPES[2];
+    nl+=`<div class="flex items-center gap-2.5 bg-purple-50 rounded-2xl p-3 mb-2 border border-purple-100">`;
+    nl+=`<div class="text-lg shrink-0">${nt.emoji}</div>`;
+    nl+=`<div class="flex-1 min-w-0"><div class="font-semibold text-gray-600 text-xs leading-snug" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(n.text)}</div><div class="text-xs text-gray-400 mt-0.5">${n.date||''} · ${nt.label}${n.hidden?' · 🙈 已隱藏':''}</div></div>`;
+    nl+=`<div class="flex items-center gap-1 shrink-0">`;
+    nl+=`<button data-a="toggleN" data-id="${n.id}" class="w-8 h-8 rounded-xl ${n.hidden?'bg-gray-100 text-gray-400':'bg-green-50 text-green-500'} flex items-center justify-center text-xs">${n.hidden?'🙈':'👁️'}</button>`;
+    nl+=`<button data-a="editN" data-id="${n.id}" class="w-8 h-8 rounded-xl bg-purple-100 text-purple-500 flex items-center justify-center text-xs">✏️</button>`;
+    nl+=`<button data-a="delN" data-id="${n.id}" class="w-8 h-8 rounded-xl bg-rose-50 text-rose-400 flex items-center justify-center text-xs">🗑️</button>`;
+    nl+=`</div></div>`;
+  });
+
+  let cl='';
+  if(!S.cards.length)cl='<div class="text-center py-6 text-purple-200 text-sm">未有卡片 📭</div>';
+  else S.cards.forEach((c,i)=>{
+    const g=(GRADS[c.color]||GRADS.lavender).bg;
+    cl+=`<div class="flex items-center gap-2.5 bg-purple-50 rounded-2xl p-3 mb-2 border border-purple-100">`;
+    cl+=`<div class="w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0 shadow-sm" style="background:${g}">${c.icon}</div>`;
+    cl+=`<div class="flex-1 min-w-0"><div class="font-bold text-gray-600 text-sm truncate">${esc(c.name)}${c.pwd?' 🔒':''}</div><div class="text-xs text-gray-400 truncate">${c.url||'未設定連結'}</div></div>`;
+    cl+=`<div class="flex items-center gap-1 shrink-0">`;
+    cl+=i>0?`<button data-a="move" data-id="${c.id}" data-d="up" class="w-7 h-7 rounded-lg bg-purple-100 text-purple-400 flex items-center justify-center text-xs">▲</button>`:'<div class="w-7"></div>';
+    cl+=i<S.cards.length-1?`<button data-a="move" data-id="${c.id}" data-d="down" class="w-7 h-7 rounded-lg bg-purple-100 text-purple-400 flex items-center justify-center text-xs">▼</button>`:'<div class="w-7"></div>';
+    cl+=`<button data-a="edit" data-id="${c.id}" class="w-7 h-7 rounded-lg bg-purple-100 text-purple-500 flex items-center justify-center text-xs">✏️</button>`;
+    cl+=`<button data-a="del" data-id="${c.id}" class="w-7 h-7 rounded-lg bg-rose-50 text-rose-400 flex items-center justify-center text-xs">🗑️</button>`;
+    cl+=`</div></div>`;
+  });
+
+  let h=`<div class="min-h-screen" style="background:#faf5ff">`;
+  h+=`<div class="px-5 pt-12 pb-5 flex items-center justify-between" style="background:linear-gradient(135deg,#7c3aed,#a855f7)"><div><div class="text-white font-bold text-lg">⚙️ 設定</div><div class="text-purple-200 text-xs">管理公告、卡片同連結</div></div><button data-a="back" class="bg-white bg-opacity-20 text-white px-4 py-2 rounded-xl text-sm font-semibold active:scale-95 transition-transform">✕ 返回</button></div>`;
+
+  h+=`<div class="px-4 py-4 pb-28 max-w-lg mx-auto space-y-4">`;
+
+  h+=`<div class="bg-white rounded-3xl p-5 border border-purple-100 shadow-sm fade-in"><div class="font-bold text-gray-600 text-sm mb-3">🏷️ Hub 設定</div><div class="space-y-3">`;
+  h+=`<div><label class="text-xs font-bold text-purple-400 mb-1 block">標題</label><input id="hTitle" value="${esc(S.set.title)}" class="w-full border border-purple-100 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-200 focus:border-purple-300 bg-purple-50 bg-opacity-40"></div>`;
+  h+=`<div><label class="text-xs font-bold text-purple-400 mb-1 block">副標題</label><input id="hSub" value="${esc(S.set.sub)}" class="w-full border border-purple-100 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-200 focus:border-purple-300 bg-purple-50 bg-opacity-40"></div>`;
+  h+=`<div><label class="text-xs font-bold text-purple-400 mb-1 block">管理員密碼 ${S.set.pwd?'🟢 已設定':'⚪ 未設定'}</label><input id="hPwd" type="password" value="${esc(S.set.pwd)}" placeholder="留空 = 無密碼" class="w-full border border-purple-100 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-200 focus:border-purple-300 bg-purple-50 bg-opacity-40"></div>`;
+  h+=`<button data-a="saveSet" class="w-full text-white font-bold py-2.5 rounded-xl text-sm shadow-md active:scale-95 transition-transform" style="background:linear-gradient(135deg,#a855f7,#c084fc)">💾 儲存設定</button>`;
+  h+=`</div></div>`;
+
+  h+=`<div class="bg-white rounded-3xl p-5 border border-purple-100 shadow-sm fade-in"><div class="flex items-center justify-between mb-4"><div class="font-bold text-gray-600 text-sm">📢 公告管理</div><span class="text-xs bg-purple-50 text-purple-500 px-3 py-1 rounded-lg font-bold">${S.notices.length} 個</span></div>${nl}<button data-a="addN" class="w-full mt-3 text-white font-bold py-3 rounded-xl text-sm shadow-md active:scale-95 transition-transform" style="background:linear-gradient(135deg,#f472b6,#ec4899)">＋ 新增公告</button></div>`;
+
+  h+=`<div class="bg-white rounded-3xl p-5 border border-purple-100 shadow-sm fade-in"><div class="flex items-center justify-between mb-4"><div class="font-bold text-gray-600 text-sm">📱 卡片管理</div><span class="text-xs bg-purple-50 text-purple-500 px-3 py-1 rounded-lg font-bold">${S.cards.length} 個</span></div>${cl}<button data-a="add" class="w-full mt-3 text-white font-bold py-3 rounded-xl text-sm shadow-md active:scale-95 transition-transform" style="background:linear-gradient(135deg,#34d399,#6ee7b7)">＋ 新增卡片</button></div>`;
+
+  h+=`</div></div>`;
+  return h;
+}
+
+// ═══ MODALS ═══
+function editModalView(){
+  const c=S.editModal;const isNew=!c.id;
+  const ep=EMOJIS.map(e=>`<button data-a="emoji" data-e="${e}" class="w-10 h-10 rounded-xl text-xl flex items-center justify-center transition-all ${c.icon===e?'bg-purple-100 ring-2 ring-purple-400 scale-110':'hover:bg-purple-50'}">${e}</button>`).join('');
+  const cp=Object.entries(GRADS).map(([k,v])=>`<button data-a="color" data-c="${k}" class="w-10 h-10 rounded-xl shadow-sm transition-all ${c.color===k?'ring-2 ring-offset-2 ring-purple-500 scale-110':''}" style="background:${v.bg}" title="${v.l}"></button>`).join('');
+  const co=CATS.map(ct=>`<option value="${ct}" ${c.cat===ct?'selected':''}>${ct}</option>`).join('');
+  const pg=(GRADS[c.color]||GRADS.lavender).bg;
+
+  let h=`<div class="fixed inset-0 z-50 modal-bg flex items-end sm:items-center justify-center" data-a="closeEditBg"><div class="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl max-h-screen overflow-y-auto slide-up" onclick="event.stopPropagation()">`;
+  h+=`<div class="sticky top-0 bg-white px-5 pt-5 pb-3 border-b border-purple-50 flex items-center justify-between rounded-t-3xl z-10"><div class="font-bold text-gray-600">${isNew?'✨ 新增卡片':'✏️ 編輯卡片'}</div><button data-a="closeEdit" class="text-gray-300 hover:text-gray-500 text-xl font-bold">✕</button></div>`;
+  h+=`<div class="p-5 space-y-5">`;
+  h+=`<div class="flex justify-center"><div class="w-28 rounded-3xl shadow-lg flex flex-col items-center justify-center py-5 relative overflow-hidden" style="background:${pg}"><div class="absolute top-0 right-0 w-12 h-12 rounded-full bg-white opacity-10 -translate-y-3 translate-x-3"></div><div class="relative text-3xl mb-1">${c.icon||'📱'}</div><div class="text-white font-bold text-xs relative">${esc(c.name)||'預覽'}</div></div></div>`;
+  h+=`<div><label class="text-xs font-bold text-purple-400 mb-2 block">圖示</label><div class="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto rounded-xl bg-purple-50 bg-opacity-40 p-2">${ep}</div></div>`;
+  h+=`<div><label class="text-xs font-bold text-purple-400 mb-2 block">顏色</label><div class="flex flex-wrap gap-2.5">${cp}</div></div>`;
+  h+=`<div><label class="text-xs font-bold text-purple-400 mb-1 block">名稱 *</label><input id="eName" value="${esc(c.name||'')}" placeholder="例如：Daily Report" class="w-full border border-purple-100 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-200 bg-purple-50 bg-opacity-40"></div>`;
+  h+=`<div><label class="text-xs font-bold text-purple-400 mb-1 block">描述（選填）</label><input id="eDesc" value="${esc(c.desc||'')}" placeholder="簡單描述" class="w-full border border-purple-100 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-200 bg-purple-50 bg-opacity-40"></div>`;
+  h+=`<div><label class="text-xs font-bold text-purple-400 mb-1 block">連結 URL *</label><input id="eUrl" value="${esc(c.url||'')}" placeholder="https://..." class="w-full border border-purple-100 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-200 bg-purple-50 bg-opacity-40"></div>`;
+  h+=`<div><label class="text-xs font-bold text-purple-400 mb-1 block">分類</label><select id="eCat" class="w-full border border-purple-100 rounded-xl px-4 py-2.5 text-sm bg-white focus:ring-2 focus:ring-purple-200">${co}</select></div>`;
+  h+=`<div><label class="text-xs font-bold text-purple-400 mb-1 block">密碼保護（選填）</label><input id="ePwd" type="password" value="${esc(c.pwd||'')}" placeholder="留空 = 唔設密碼" class="w-full border border-purple-100 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-200 bg-purple-50 bg-opacity-40"><div class="text-xs text-purple-300 mt-1">設咗密碼，撳卡片時要輸入先入到 🔑</div></div>`;
+  h+=`<div class="flex gap-3 pt-2 pb-6"><button data-a="closeEdit" class="flex-1 bg-gray-100 text-gray-400 font-semibold py-3 rounded-xl text-sm">取消</button><button data-a="saveCard" class="flex-1 text-white font-bold py-3 rounded-xl text-sm shadow-md active:scale-95 transition-transform" style="background:linear-gradient(135deg,#a855f7,#c084fc)">💾 儲存</button></div>`;
+  h+=`</div></div></div>`;
+  return h;
+}
+
+function noticeEditView(){
+  const n=S.noticeEdit;const isNew=!n.id;
+  const to=NTYPES.map(t=>`<option value="${t.key}" ${n.type===t.key?'selected':''}>${t.emoji} ${t.label}</option>`).join('');
+  let h=`<div class="fixed inset-0 z-50 modal-bg flex items-end sm:items-center justify-center" data-a="closeNBg"><div class="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl slide-up" onclick="event.stopPropagation()">`;
+  h+=`<div class="px-5 pt-5 pb-3 border-b border-purple-50 flex items-center justify-between"><div class="font-bold text-gray-600">${isNew?'📢 新增公告':'📢 編輯公告'}</div><button data-a="closeN" class="text-gray-300 hover:text-gray-500 text-xl font-bold">✕</button></div>`;
+  h+=`<div class="p-5 space-y-4">`;
+  h+=`<div><label class="text-xs font-bold text-purple-400 mb-1 block">類型</label><select id="nType" class="w-full border border-purple-100 rounded-xl px-4 py-2.5 text-sm bg-white focus:ring-2 focus:ring-purple-200">${to}</select></div>`;
+  h+=`<div><label class="text-xs font-bold text-purple-400 mb-1 block">內容 *</label><textarea id="nText" rows="4" placeholder="輸入公告內容..." class="w-full border border-purple-100 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-200 bg-purple-50 bg-opacity-40 resize-none">${esc(n.text||'')}</textarea></div>`;
+  h+=`<div class="flex gap-3 pb-6"><button data-a="closeN" class="flex-1 bg-gray-100 text-gray-400 font-semibold py-3 rounded-xl text-sm">取消</button><button data-a="saveN" class="flex-1 text-white font-bold py-3 rounded-xl text-sm shadow-md active:scale-95 transition-transform" style="background:linear-gradient(135deg,#f472b6,#ec4899)">💾 儲存</button></div>`;
+  h+=`</div></div></div>`;
+  return h;
+}
+
+function pwdModalView(){
+  const{card:c,err}=S.pwdModal;
+  let h=`<div class="fixed inset-0 z-50 modal-bg flex items-center justify-center p-6" data-a="closePwd"><div class="bg-white w-full max-w-xs rounded-3xl p-6 shadow-2xl text-center" onclick="event.stopPropagation()">`;
+  h+=`<div class="text-4xl mb-3">${c.icon||'🔒'}</div><div class="font-bold text-gray-600 mb-1">${esc(c.name)}</div><div class="text-xs text-purple-300 mb-4">需要密碼先可以入 🔑</div>`;
+  h+=`<input id="cPwd" type="password" placeholder="輸入密碼" class="w-full border ${err?'border-rose-300 bg-rose-50':'border-purple-100'} rounded-xl px-4 py-3 text-sm text-center focus:ring-2 focus:ring-purple-200 mb-1">`;
+  if(err)h+=`<div class="text-rose-400 text-xs font-semibold mb-1">密碼錯誤 🙈</div>`;
+  h+=`<div class="flex gap-3 mt-3"><button data-a="closePwd" class="flex-1 bg-gray-100 text-gray-400 font-semibold py-2.5 rounded-xl text-sm">取消</button><button data-a="checkPwd" class="flex-1 text-white font-bold py-2.5 rounded-xl text-sm" style="background:linear-gradient(135deg,#a855f7,#c084fc)">確認</button></div>`;
+  h+=`</div></div>`;
+  return h;
+}
+
+function adminPwdView(){
+  let h=`<div class="fixed inset-0 z-50 modal-bg flex items-center justify-center p-6" data-a="closeAdm"><div class="bg-white w-full max-w-xs rounded-3xl p-6 shadow-2xl text-center" onclick="event.stopPropagation()">`;
+  h+=`<div class="text-4xl mb-3">🔐</div><div class="font-bold text-gray-600 mb-1">管理員登入</div><div class="text-xs text-purple-300 mb-4">輸入管理員密碼</div>`;
+  h+=`<input id="aPwd" type="password" placeholder="密碼" class="w-full border border-purple-100 rounded-xl px-4 py-3 text-sm text-center focus:ring-2 focus:ring-purple-200 mb-1">`;
+  h+=`<div id="aPwdErr" class="text-rose-400 text-xs font-semibold mb-1 hidden">密碼錯誤 🙈</div>`;
+  h+=`<div class="flex gap-3 mt-3"><button data-a="closeAdm" class="flex-1 bg-gray-100 text-gray-400 font-semibold py-2.5 rounded-xl text-sm">取消</button><button data-a="checkAdm" class="flex-1 text-white font-bold py-2.5 rounded-xl text-sm" style="background:linear-gradient(135deg,#7c3aed,#a855f7)">登入</button></div>`;
+  h+=`</div></div>`;
+  return h;
+}
+
+function delModalView(){
+  const c=S.delConfirm;
+  let h=`<div class="fixed inset-0 z-50 modal-bg flex items-center justify-center p-6" data-a="cancelDel"><div class="bg-white w-full max-w-xs rounded-3xl p-6 shadow-2xl text-center" onclick="event.stopPropagation()">`;
+  h+=`<div class="text-4xl mb-3">🗑️</div><div class="text-sm text-gray-400 mb-1">確定刪除</div><div class="font-bold text-gray-700 text-lg mb-4">${c.icon} ${esc(c.name)}</div>`;
+  h+=`<div class="flex gap-3"><button data-a="cancelDel" class="flex-1 bg-gray-100 text-gray-400 font-semibold py-2.5 rounded-xl text-sm">取消</button><button data-a="confirmDel" class="flex-1 bg-rose-500 text-white font-bold py-2.5 rounded-xl text-sm">確定刪除</button></div>`;
+  h+=`</div></div>`;
+  return h;
+}
+
+function noticeDelView(){
+  const n=S.noticeDel;
+  let h=`<div class="fixed inset-0 z-50 modal-bg flex items-center justify-center p-6" data-a="cancelNDel"><div class="bg-white w-full max-w-xs rounded-3xl p-6 shadow-2xl text-center" onclick="event.stopPropagation()">`;
+  h+=`<div class="text-4xl mb-3">🗑️</div><div class="text-sm text-gray-400 mb-1">確定刪除呢個公告？</div>`;
+  h+=`<div class="font-semibold text-gray-500 text-sm mb-4 px-2 leading-snug">"${esc((n.text||'').substring(0,50))}${(n.text||'').length>50?'...':''}"</div>`;
+  h+=`<div class="flex gap-3"><button data-a="cancelNDel" class="flex-1 bg-gray-100 text-gray-400 font-semibold py-2.5 rounded-xl text-sm">取消</button><button data-a="confirmNDel" class="flex-1 bg-rose-500 text-white font-bold py-2.5 rounded-xl text-sm">確定刪除</button></div>`;
+  h+=`</div></div>`;
+  return h;
+}
+
+// ═══ EVENTS ═══
+function bindEvents(){
+  document.querySelectorAll('[data-a]').forEach(el=>{
+    el.onclick=function(ev){
+      if(['closeEditBg','closeNBg','closePwd','closeAdm','cancelDel','cancelNDel'].includes(this.dataset.a)){
+        if(ev.target!==this)return;
+      }
+      act(this.dataset.a,this.dataset);
+    };
+  });
+  const cp=document.getElementById('cPwd');if(cp){cp.onkeydown=e=>{if(e.key==='Enter')act('checkPwd');};setTimeout(()=>cp.focus(),120);}
+  const ap=document.getElementById('aPwd');if(ap){ap.onkeydown=e=>{if(e.key==='Enter')act('checkAdm');};setTimeout(()=>ap.focus(),120);}
+}
+
+function act(a,d={}){
+  switch(a){
+    case'open':{const c=S.cards.find(x=>x.id===d.id);if(!c)return;if(c.pwd){S.pwdModal={card:c,err:false};render();}else{if(c.url)window.open(c.url,'_blank');else toast('⚠️ 未設定連結');}break;}
+    case'checkPwd':{const inp=document.getElementById('cPwd');if(inp&&inp.value===S.pwdModal.card.pwd){const u=S.pwdModal.card.url;S.pwdModal=null;render();if(u)window.open(u,'_blank');else toast('⚠️ 未設定連結');}else{S.pwdModal.err=true;render();}break;}
+    case'closePwd':S.pwdModal=null;render();break;
+
+    case'admin':if(S.set.pwd&&!S.admin){S.adminPwd=true;render();}else{S.admin=true;S.view='settings';render();}break;
+    case'checkAdm':{const inp=document.getElementById('aPwd');if(inp&&inp.value===S.set.pwd){S.admin=true;S.adminPwd=false;S.view='settings';render();}else{const e=document.getElementById('aPwdErr');if(e)e.classList.remove('hidden');}break;}
+    case'closeAdm':S.adminPwd=false;render();break;
+    case'back':S.view='main';render();break;
+
+    case'saveSet':{S.set.title=document.getElementById('hTitle').value.trim()||'Team Hub ✨';S.set.sub=document.getElementById('hSub').value.trim();S.set.pwd=document.getElementById('hPwd').value;save();toast('✅ 設定已儲存');break;}
+
+    case'add':S.editModal={id:'',icon:'📝',name:'',desc:'',url:'',pwd:'',cat:'其他',color:'lavender'};render();break;
+    case'edit':{const c=S.cards.find(x=>x.id===d.id);if(c)S.editModal={...c};render();break;}
+    case'del':{const c=S.cards.find(x=>x.id===d.id);if(c)S.delConfirm={id:c.id,name:c.name,icon:c.icon};render();break;}
+    case'confirmDel':if(S.delConfirm){S.cards=S.cards.filter(c=>c.id!==S.delConfirm.id);S.delConfirm=null;save();toast('🗑️ 已刪除');}break;
+    case'cancelDel':S.delConfirm=null;render();break;
+    case'move':{const i=S.cards.findIndex(c=>c.id===d.id);if(i<0)return;if(d.d==='up'&&i>0)[S.cards[i],S.cards[i-1]]=[S.cards[i-1],S.cards[i]];if(d.d==='down'&&i<S.cards.length-1)[S.cards[i],S.cards[i+1]]=[S.cards[i+1],S.cards[i]];save();render();break;}
+    case'emoji':if(S.editModal){S.editModal.icon=d.e;render();}break;
+    case'color':if(S.editModal){S.editModal.color=d.c;render();}break;
+    case'saveCard':{const n=document.getElementById('eName').value.trim();const ds=document.getElementById('eDesc').value.trim();const u=document.getElementById('eUrl').value.trim();const ct=document.getElementById('eCat').value;const pw=document.getElementById('ePwd').value;if(!n){toast('⚠️ 請輸入名稱');return;}const cd={...S.editModal,name:n,desc:ds,url:u,cat:ct,pwd:pw};if(cd.id){S.cards=S.cards.map(c=>c.id===cd.id?cd:c);}else{cd.id=Date.now().toString();S.cards.push(cd);}S.editModal=null;save();toast('✅ 已儲存');break;}
+    case'closeEdit':case'closeEditBg':S.editModal=null;render();break;
+
+    case'addN':S.noticeEdit={id:'',text:'',type:'important',date:today()};render();break;
+    case'editN':{const n=S.notices.find(x=>x.id===d.id);if(n)S.noticeEdit={...n};render();break;}
+    case'saveN':{const tx=document.getElementById('nText').value.trim();const tp=document.getElementById('nType').value;if(!tx){toast('⚠️ 請輸入內容');return;}const nd={...S.noticeEdit,text:tx,type:tp};if(nd.id){S.notices=S.notices.map(n=>n.id===nd.id?{...n,text:nd.text,type:nd.type}:n);}else{nd.id='n'+Date.now();nd.date=today();S.notices.unshift(nd);}S.noticeEdit=null;save();toast('✅ 公告已儲存');break;}
+    case'closeN':case'closeNBg':S.noticeEdit=null;render();break;
+    case'toggleN':{S.notices=S.notices.map(n=>n.id===d.id?{...n,hidden:!n.hidden}:n);save();render();break;}
+    case'delN':{const n=S.notices.find(x=>x.id===d.id);if(n)S.noticeDel=n;render();break;}
+    case'confirmNDel':if(S.noticeDel){S.notices=S.notices.filter(n=>n.id!==S.noticeDel.id);S.noticeDel=null;save();toast('🗑️ 公告已刪除');}break;
+    case'cancelNDel':S.noticeDel=null;render();break;
+  }
+}
+
+load();
+</script>
+</body>
+</html>
