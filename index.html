@@ -42,7 +42,7 @@ input:focus,select:focus,textarea:focus{outline:none}
 <body>
 <div id="app"></div>
 <script>
-const API_URL='';
+const API_URL='https://script.google.com/macros/s/AKfycbwiRcNYAfGlzaQQ66B3LmRhR72m-b1HO3_Ogp_5fDRh8m2sKVyhzCs2lWpG7l0D7YHR_Q/exec';
 
 const GRADS={
   lavender:{bg:'linear-gradient(135deg,#a78bfa,#c4b5fd)',l:'薰衣草'},
@@ -79,11 +79,22 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 
 async function load(){
   try{const c=localStorage.getItem('hubCfg4');if(c){const d=JSON.parse(c);S.cards=d.cards||[];S.notices=d.notices||[];S.set={...S.set,...d.set};S.loaded=true;S.loading=false;render();}}catch(e){}
-  if(API_URL){try{const r=await fetch(API_URL+'?action=getHubConfig');const j=await r.json();if(j.success&&j.data){S.cards=j.data.cards||[];S.notices=j.data.notices||[];S.set={...S.set,...j.data.set};cache();}}catch(e){}}
+  if(API_URL){try{const r=await fetch(API_URL+'?action=getHubConfig');const j=await r.json();if(j.success&&j.data){S.cards=j.data.cards||[];S.notices=j.data.notices||[];S.set={...S.set,...j.data.set};cache();}}catch(e){console.log('API load skipped',e);}}
   S.loaded=true;S.loading=false;render();
 }
 function cache(){try{localStorage.setItem('hubCfg4',JSON.stringify({cards:S.cards,notices:S.notices,set:S.set}));}catch(e){}}
-async function save(){cache();if(!API_URL)return;try{await fetch(API_URL,{method:'POST',body:JSON.stringify({action:'saveHubConfig',data:{cards:S.cards,notices:S.notices,set:S.set}})});}catch(e){console.error(e);}}
+async function save(){
+  cache();
+  if(!API_URL)return;
+  try{
+    await fetch(API_URL,{
+      method:'POST',
+      mode:'no-cors',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({action:'saveHubConfig',data:{cards:S.cards,notices:S.notices,set:S.set}})
+    });
+  }catch(e){console.log('API save skipped',e);}
+}
 function toast(m){S.toast=m;render();setTimeout(()=>{S.toast='';render();},2400);}
 
 // ═══ MARQUEE SPEED ═══
@@ -133,12 +144,9 @@ function mainView(){
   if(an.length){
     h+=`<div class="relative -mt-1" style="background:linear-gradient(135deg,#7c3aed,#9333ea)">`;
     h+=`<div class="flex items-center">`;
-    // 左邊固定 badge
     h+=`<div class="shrink-0 flex items-center gap-1.5 px-3 py-2.5 z-10 relative" style="background:linear-gradient(135deg,#7c3aed,#9333ea)"><span class="text-sm">📢</span><span class="text-white text-xs font-bold opacity-80">公告</span><span class="pulse-dot inline-block w-1.5 h-1.5 rounded-full bg-yellow-300"></span><div class="absolute right-0 top-0 bottom-0 w-6" style="background:linear-gradient(to right,#7c3aed,transparent)"></div></div>`;
-    // 跑馬燈
     h+=`<div class="marquee-wrap flex-1 py-2.5 pr-3">`;
     h+=`<div class="marquee-track">`;
-    // 重複兩次內容，確保無縫接軌
     for(let r=0;r<2;r++){
       an.forEach(n=>{
         const nt=NTYPES.find(t=>t.key===n.type)||NTYPES[2];
