@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Base64 Icon 工具</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,system-ui,sans-serif;background:#faf5ff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:#fff;border-radius:24px;padding:32px;max-width:500px;width:100%;box-shadow:0 8px 30px rgba(139,92,246,.12);border:1px solid #ede9fe}
+h1{font-size:18px;color:#7c3aed;margin-bottom:16px;text-align:center}
+.drop{border:2px dashed #c4b5fd;border-radius:16px;padding:40px 20px;text-align:center;color:#a78bfa;font-size:14px;cursor:pointer;transition:all .2s;margin-bottom:16px}
+.drop:hover,.drop.over{border-color:#7c3aed;background:#f5f3ff}
+.preview{text-align:center;margin:16px 0}
+.preview img{width:80px;height:80px;border-radius:18px;box-shadow:0 4px 12px rgba(0,0,0,.1)}
+textarea{width:100%;height:200px;border:1px solid #e9d5ff;border-radius:12px;padding:12px;font-size:11px;font-family:monospace;resize:vertical;color:#4b5563}
+.btn{display:block;width:100%;padding:12px;border-radius:12px;border:none;font-size:14px;font-weight:700;color:#fff;background:linear-gradient(135deg,#a855f7,#c084fc);cursor:pointer;margin-top:12px}
+.btn:active{transform:scale(.97)}
+.note{font-size:11px;color:#a78bfa;margin-top:8px;text-align:center}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🔧 Icon → Base64 轉換工具</h1>
+  <div class="drop" id="drop" onclick="document.getElementById('fileInput').click()">
+    📁 撳呢度揀圖片<br>
+    <span style="font-size:12px">或者拖入 apple-touch-icon.png</span>
+  </div>
+  <input type="file" id="fileInput" accept="image/png,image/jpeg" style="display:none">
+  <div class="preview hidden" id="preview">
+    <img id="previewImg">
+    <div style="font-size:12px;color:#7c3aed;margin-top:8px;font-weight:600" id="previewInfo"></div>
+  </div>
+  <textarea id="output" class="hidden" readonly placeholder="Base64 會出現喺呢度..."></textarea>
+  <button class="btn hidden" id="copyBtn" onclick="copyBase64()">📋 複製 Base64</button>
+  <div class="note">複製後貼入 .mobileconfig 嘅 &lt;data&gt; 入面</div>
+  <div id="toast" style="display:none;position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#7c3aed;color:#fff;padding:10px 20px;border-radius:12px;font-size:13px;font-weight:600;z-index:99">✅ 已複製！</div>
+</div>
+<script>
+const drop=document.getElementById('drop'),fileInput=document.getElementById('fileInput'),output=document.getElementById('output'),preview=document.getElementById('preview'),previewImg=document.getElementById('previewImg'),previewInfo=document.getElementById('previewInfo'),copyBtnEl=document.getElementById('copyBtn');
+
+drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('over')});
+drop.addEventListener('dragleave',()=>drop.classList.remove('over'));
+drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('over');if(e.dataTransfer.files[0])processFile(e.dataTransfer.files[0])});
+fileInput.addEventListener('change',e=>{if(e.target.files[0])processFile(e.target.files[0])});
+
+function processFile(file){
+  const reader=new FileReader();
+  reader.onload=function(e){
+    const full=e.target.result;
+    const base64Only=full.split(',')[1];
+    // 每 76 字符換一行（符合 plist 格式）
+    const formatted=base64Only.replace(/(.{76})/g,'$1\n');
+    output.value=formatted;
+    output.classList.remove('hidden');
+    copyBtnEl.classList.remove('hidden');
+    preview.classList.remove('hidden');
+    previewImg.src=full;
+    drop.innerHTML='✅ 已載入！可以再揀過';
+    // 計算圖片尺寸
+    const img=new Image();
+    img.onload=()=>{previewInfo.textContent=`${img.width} × ${img.height}px · ${(file.size/1024).toFixed(1)}KB`};
+    img.src=full;
+  };
+  reader.readAsDataURL(file);
+}
+
+function copyBase64(){
+  output.select();
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(output.value).then(()=>showToast());
+  }else{
+    document.execCommand('copy');
+    showToast();
+  }
+}
+
+function showToast(){
+  const t=document.getElementById('toast');
+  t.style.display='block';
+  setTimeout(()=>t.style.display='none',2000);
+}
+</script>
+</body>
+</html>
