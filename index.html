@@ -71,7 +71,8 @@ let S={
   admin:false,view:'main',
   editModal:null,pwdModal:null,adminPwd:false,delConfirm:null,
   noticeEdit:null,noticeDel:null,
-  toast:''
+  toast:'',
+  _aPwd:'',_cPwd:''
 };
 
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -97,11 +98,45 @@ async function save(){
 }
 function toast(m){S.toast=m;render();setTimeout(()=>{S.toast='';render();},2400);}
 
-// ═══ MARQUEE SPEED ═══
 function calcDur(count){return Math.max(20, count * 24);}
 
-// ═══ RENDER ═══
+function syncForms(){
+  if(S.editModal){
+    const n=document.getElementById('eName');
+    const d=document.getElementById('eDesc');
+    const u=document.getElementById('eUrl');
+    const c=document.getElementById('eCat');
+    const p=document.getElementById('ePwd');
+    if(n)S.editModal.name=n.value;
+    if(d)S.editModal.desc=d.value;
+    if(u)S.editModal.url=u.value;
+    if(c)S.editModal.cat=c.value;
+    if(p)S.editModal.pwd=p.value;
+  }
+  if(S.noticeEdit){
+    const t=document.getElementById('nText');
+    const tp=document.getElementById('nType');
+    if(t)S.noticeEdit.text=t.value;
+    if(tp)S.noticeEdit.type=tp.value;
+  }
+  if(S.adminPwd){
+    const a=document.getElementById('aPwd');
+    if(a)S._aPwd=a.value;
+  }
+  if(S.pwdModal){
+    const c=document.getElementById('cPwd');
+    if(c)S._cPwd=c.value;
+  }
+}
+
 function render(){
+  syncForms();
+  const _fid=document.activeElement&&document.activeElement.id||null;
+  let _ss=null,_se=null;
+  if(document.activeElement){
+    try{_ss=document.activeElement.selectionStart;_se=document.activeElement.selectionEnd;}catch(e){}
+  }
+
   const a=document.getElementById('app');
   if(S.loading&&!S.loaded){a.innerHTML=`<div class="min-h-screen flex items-center justify-center" style="background:#faf5ff"><div class="text-center"><div class="text-5xl anim-bounce mb-4">🧸</div><div class="text-lg font-bold text-purple-300">載入緊...</div></div></div>`;return;}
   let h=S.view==='main'?mainView():settingsView();
@@ -115,6 +150,16 @@ function render(){
   a.innerHTML=h;
   bindEvents();
   initMarquee();
+
+  if(_fid){
+    const el=document.getElementById(_fid);
+    if(el){
+      el.focus();
+      if(typeof _ss==='number'&&el.setSelectionRange){
+        try{el.setSelectionRange(_ss,_se);}catch(e){}
+      }
+    }
+  }
 }
 
 function initMarquee(){
@@ -129,7 +174,6 @@ function initMarquee(){
 
 function mainView(){
   let h=`<div class="min-h-screen" style="background:#faf5ff">`;
-  // ── Header ──
   h+=`<div class="relative overflow-hidden" style="background:linear-gradient(135deg,#c084fc,#e879f9,#f9a8d4)">`;
   h+=`<div class="absolute top-4 right-8 w-14 h-14 rounded-full bg-white opacity-10 float1"></div>`;
   h+=`<div class="absolute top-20 right-28 w-6 h-6 rounded-full bg-white opacity-15 float2"></div>`;
@@ -139,7 +183,6 @@ function mainView(){
   h+=`<svg class="absolute bottom-0 left-0 w-full" viewBox="0 0 1440 40" preserveAspectRatio="none"><path d="M0,20 Q360,42 720,18 T1440,22 L1440,40 L0,40 Z" fill="#faf5ff"/></svg>`;
   h+=`</div>`;
 
-  // ── Marquee Banner ──
   const an=S.notices.filter(n=>!n.hidden);
   if(an.length){
     h+=`<div class="relative -mt-1" style="background:linear-gradient(135deg,#7c3aed,#9333ea)">`;
@@ -163,7 +206,6 @@ function mainView(){
 
   h+=`<div class="px-4 pb-28 pt-5 max-w-lg mx-auto">`;
 
-  // ── Cards ──
   const cats={};S.cards.forEach(c=>{const k=c.cat||'其他';if(!cats[k])cats[k]=[];cats[k].push(c);});
   const order=['表單','數據','工具','其他'];
   const sorted=Object.keys(cats).sort((a,b)=>{const ia=order.indexOf(a),ib=order.indexOf(b);return(ia<0?99:ia)-(ib<0?99:ib);});
@@ -189,7 +231,6 @@ function mainView(){
   }
   h+=`</div>`;
 
-  // ── FAB ──
   h+=`<button data-a="admin" class="fixed bottom-6 right-6 w-14 h-14 rounded-full shadow-2xl flex items-center justify-center text-xl active:scale-90 transition-transform z-40" style="background:linear-gradient(135deg,#c084fc,#e879f9)"><span class="drop-shadow-sm">⚙️</span></button>`;
   h+=`</div>`;
   return h;
@@ -245,7 +286,6 @@ function settingsView(){
   return h;
 }
 
-// ═══ MODALS ═══
 function editModalView(){
   const c=S.editModal;const isNew=!c.id;
   const ep=EMOJIS.map(e=>`<button data-a="emoji" data-e="${e}" class="w-10 h-10 rounded-xl text-xl flex items-center justify-center transition-all ${c.icon===e?'bg-purple-100 ring-2 ring-purple-400 scale-110':'hover:bg-purple-50'}">${e}</button>`).join('');
@@ -286,7 +326,7 @@ function pwdModalView(){
   const{card:c,err}=S.pwdModal;
   let h=`<div class="fixed inset-0 z-50 modal-bg flex items-center justify-center p-6" data-a="closePwd"><div class="bg-white w-full max-w-xs rounded-3xl p-6 shadow-2xl text-center" onclick="event.stopPropagation()">`;
   h+=`<div class="text-4xl mb-3">${c.icon||'🔒'}</div><div class="font-bold text-gray-600 mb-1">${esc(c.name)}</div><div class="text-xs text-purple-300 mb-4">需要密碼先可以入 🔑</div>`;
-  h+=`<input id="cPwd" type="password" placeholder="輸入密碼" class="w-full border ${err?'border-rose-300 bg-rose-50':'border-purple-100'} rounded-xl px-4 py-3 text-sm text-center focus:ring-2 focus:ring-purple-200 mb-1">`;
+  h+=`<input id="cPwd" type="password" value="${esc(S._cPwd||'')}" placeholder="輸入密碼" class="w-full border ${err?'border-rose-300 bg-rose-50':'border-purple-100'} rounded-xl px-4 py-3 text-sm text-center focus:ring-2 focus:ring-purple-200 mb-1">`;
   if(err)h+=`<div class="text-rose-400 text-xs font-semibold mb-1">密碼錯誤 🙈</div>`;
   h+=`<div class="flex gap-3 mt-3"><button data-a="closePwd" class="flex-1 bg-gray-100 text-gray-400 font-semibold py-2.5 rounded-xl text-sm">取消</button><button data-a="checkPwd" class="flex-1 text-white font-bold py-2.5 rounded-xl text-sm" style="background:linear-gradient(135deg,#a855f7,#c084fc)">確認</button></div>`;
   h+=`</div></div>`;
@@ -296,7 +336,7 @@ function pwdModalView(){
 function adminPwdView(){
   let h=`<div class="fixed inset-0 z-50 modal-bg flex items-center justify-center p-6" data-a="closeAdm"><div class="bg-white w-full max-w-xs rounded-3xl p-6 shadow-2xl text-center" onclick="event.stopPropagation()">`;
   h+=`<div class="text-4xl mb-3">🔐</div><div class="font-bold text-gray-600 mb-1">管理員登入</div><div class="text-xs text-purple-300 mb-4">輸入管理員密碼</div>`;
-  h+=`<input id="aPwd" type="password" placeholder="密碼" class="w-full border border-purple-100 rounded-xl px-4 py-3 text-sm text-center focus:ring-2 focus:ring-purple-200 mb-1">`;
+  h+=`<input id="aPwd" type="password" value="${esc(S._aPwd||'')}" placeholder="密碼" class="w-full border border-purple-100 rounded-xl px-4 py-3 text-sm text-center focus:ring-2 focus:ring-purple-200 mb-1">`;
   h+=`<div id="aPwdErr" class="text-rose-400 text-xs font-semibold mb-1 hidden">密碼錯誤 🙈</div>`;
   h+=`<div class="flex gap-3 mt-3"><button data-a="closeAdm" class="flex-1 bg-gray-100 text-gray-400 font-semibold py-2.5 rounded-xl text-sm">取消</button><button data-a="checkAdm" class="flex-1 text-white font-bold py-2.5 rounded-xl text-sm" style="background:linear-gradient(135deg,#7c3aed,#a855f7)">登入</button></div>`;
   h+=`</div></div>`;
@@ -322,15 +362,23 @@ function noticeDelView(){
   return h;
 }
 
-// ═══ EVENTS ═══
 function bindEvents(){
   document.querySelectorAll('[data-a]').forEach(el=>{
+    const action=el.dataset.a;
     el.onclick=function(ev){
-      if(['closeEditBg','closeNBg','closePwd','closeAdm','cancelDel','cancelNDel'].includes(this.dataset.a)){
+      if(el._touchHandled){el._touchHandled=false;return;}
+      if(['closeEditBg','closeNBg','closePwd','closeAdm','cancelDel','cancelNDel'].includes(action)){
         if(ev.target!==this)return;
       }
-      act(this.dataset.a,this.dataset);
+      act(action,this.dataset);
     };
+    el.addEventListener('touchend',function(ev){
+      if(['checkAdm','checkPwd','saveCard','saveN','saveSet'].includes(action)){
+        ev.preventDefault();
+        el._touchHandled=true;
+        act(action,el.dataset);
+      }
+    });
   });
   const cp=document.getElementById('cPwd');if(cp){cp.onkeydown=e=>{if(e.key==='Enter')act('checkPwd');};setTimeout(()=>cp.focus(),120);}
   const ap=document.getElementById('aPwd');if(ap){ap.onkeydown=e=>{if(e.key==='Enter')act('checkAdm');};setTimeout(()=>ap.focus(),120);}
@@ -338,13 +386,13 @@ function bindEvents(){
 
 function act(a,d={}){
   switch(a){
-    case'open':{const c=S.cards.find(x=>x.id===d.id);if(!c)return;if(c.pwd){S.pwdModal={card:c,err:false};render();}else{if(c.url)window.open(c.url,'_blank');else toast('⚠️ 未設定連結');}break;}
-    case'checkPwd':{const inp=document.getElementById('cPwd');if(inp&&inp.value===S.pwdModal.card.pwd){const u=S.pwdModal.card.url;S.pwdModal=null;render();if(u)window.open(u,'_blank');else toast('⚠️ 未設定連結');}else{S.pwdModal.err=true;render();}break;}
-    case'closePwd':S.pwdModal=null;render();break;
+    case'open':{const c=S.cards.find(x=>x.id===d.id);if(!c)return;if(c.pwd){S._cPwd='';S.pwdModal={card:c,err:false};render();}else{if(c.url)window.open(c.url,'_blank');else toast('⚠️ 未設定連結');}break;}
+    case'checkPwd':{const inp=document.getElementById('cPwd');if(inp&&inp.value===S.pwdModal.card.pwd){const u=S.pwdModal.card.url;S._cPwd='';S.pwdModal=null;render();if(u)window.open(u,'_blank');else toast('⚠️ 未設定連結');}else{S.pwdModal.err=true;render();}break;}
+    case'closePwd':S._cPwd='';S.pwdModal=null;render();break;
 
-    case'admin':if(S.set.pwd&&!S.admin){S.adminPwd=true;render();}else{S.admin=true;S.view='settings';render();}break;
-    case'checkAdm':{const inp=document.getElementById('aPwd');if(inp&&inp.value===S.set.pwd){S.admin=true;S.adminPwd=false;S.view='settings';render();}else{const e=document.getElementById('aPwdErr');if(e)e.classList.remove('hidden');}break;}
-    case'closeAdm':S.adminPwd=false;render();break;
+    case'admin':if(S.set.pwd&&!S.admin){S._aPwd='';S.adminPwd=true;render();}else{S.admin=true;S.view='settings';render();}break;
+    case'checkAdm':{const inp=document.getElementById('aPwd');if(inp&&inp.value===S.set.pwd){S.admin=true;S._aPwd='';S.adminPwd=false;S.view='settings';render();}else{const e=document.getElementById('aPwdErr');if(e)e.classList.remove('hidden');}break;}
+    case'closeAdm':S._aPwd='';S.adminPwd=false;render();break;
     case'back':S.view='main';render();break;
 
     case'saveSet':{S.set.title=document.getElementById('hTitle').value.trim()||'Team Hub ✨';S.set.sub=document.getElementById('hSub').value.trim();S.set.pwd=document.getElementById('hPwd').value;save();toast('✅ 設定已儲存');break;}
