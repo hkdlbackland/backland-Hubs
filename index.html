@@ -5,12 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Team Hub">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#c084fc">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
-<link rel="icon" type="image/png" href="apple-touch-icon.png">
 <title>Team Hub</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
@@ -25,6 +20,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 @keyframes toastIn{0%{opacity:0;transform:translate(-50%,16px)}10%{opacity:1;transform:translate(-50%,0)}85%{opacity:1}100%{opacity:0;transform:translate(-50%,-8px)}}
 @keyframes pulseDot{0%,100%{transform:scale(1);opacity:.6}50%{transform:scale(1.3);opacity:1}}
 @keyframes marquee{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+@keyframes shake{0%,100%{transform:translateX(0)}15%,45%,75%{transform:translateX(-10px)}30%,60%,90%{transform:translateX(10px)}}
+@keyframes dotPop{0%{transform:scale(0.5)}50%{transform:scale(1.25)}100%{transform:scale(1)}}
+@keyframes successPulse{0%{transform:scale(1)}50%{transform:scale(1.08)}100%{transform:scale(1)}}
 .fade-in{animation:fadeIn .35s ease-out both}
 .slide-up{animation:slideUp .3s ease-out}
 .float1{animation:float1 4s ease-in-out infinite}
@@ -39,6 +37,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 .marquee-track{display:inline-flex;white-space:nowrap;will-change:transform}
 .marquee-track.running{animation:marquee var(--dur,20s) linear infinite}
 .marquee-track:hover,.marquee-track:active{animation-play-state:paused}
+.shake-anim{animation:shake .45s ease}
+.dot-pop{animation:dotPop .2s ease-out}
+.pin-btn{touch-action:manipulation;-webkit-user-select:none;user-select:none}
+.pin-btn:active{transform:scale(0.88);background:rgba(168,85,247,0.15)!important}
 input,select,textarea{font-family:inherit;font-size:16px}
 input:focus,select:focus,textarea:focus{outline:none}
 ::-webkit-scrollbar{width:0;height:0}
@@ -68,16 +70,26 @@ const NTYPES=[
   {key:'reminder',emoji:'🔔',label:'提醒',bg:'#fffbeb',bdr:'#fbbf24',txt:'#92400e',pill:'#fcd34d'},
   {key:'info',emoji:'💡',label:'Tips',bg:'#eff6ff',bdr:'#60a5fa',txt:'#1e40af',pill:'#93c5fd'}
 ];
+const PIN_LEN=4;
 
 let S={
   cards:[],notices:[],
   set:{title:'Team Hub ✨',sub:'撳入去就用到 📱',pwd:''},
   loaded:false,loading:true,
   admin:false,view:'main',
-  editModal:null,pwdModal:null,adminPwd:false,delConfirm:null,
+  editModal:null,pwdModal:null,delConfirm:null,
   noticeEdit:null,noticeDel:null,
   toast:'',
-  _aPwd:'',_cPwd:''
+  // PIN states
+  pinLogin:false,
+  pinSet:false,
+  _pin:'',
+  _pinStep:1,
+  _pinFirst:'',
+  _pinErr:false,
+  _pinBusy:false,
+  // Card password
+  _cPwd:''
 };
 
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -94,16 +106,14 @@ async function save(){
   if(!API_URL)return;
   try{
     await fetch(API_URL,{
-      method:'POST',
-      mode:'no-cors',
+      method:'POST',mode:'no-cors',
       headers:{'Content-Type':'text/plain;charset=utf-8'},
       body:JSON.stringify({action:'saveHubConfig',data:{cards:S.cards,notices:S.notices,set:S.set}})
     });
   }catch(e){console.log('API save skipped',e);}
 }
 function toast(m){S.toast=m;render();setTimeout(()=>{S.toast='';render();},2400);}
-
-function calcDur(count){return Math.max(20, count * 24);}
+function calcDur(count){return Math.max(20,count*24);}
 
 function syncForms(){
   if(S.editModal){
@@ -124,10 +134,6 @@ function syncForms(){
     if(t)S.noticeEdit.text=t.value;
     if(tp)S.noticeEdit.type=tp.value;
   }
-  if(S.adminPwd){
-    const a=document.getElementById('aPwd');
-    if(a)S._aPwd=a.value;
-  }
   if(S.pwdModal){
     const c=document.getElementById('cPwd');
     if(c)S._cPwd=c.value;
@@ -138,15 +144,13 @@ function render(){
   syncForms();
   const _fid=document.activeElement&&document.activeElement.id||null;
   let _ss=null,_se=null;
-  if(document.activeElement){
-    try{_ss=document.activeElement.selectionStart;_se=document.activeElement.selectionEnd;}catch(e){}
-  }
+  if(document.activeElement){try{_ss=document.activeElement.selectionStart;_se=document.activeElement.selectionEnd;}catch(e){}}
 
   const a=document.getElementById('app');
   if(S.loading&&!S.loaded){a.innerHTML=`<div class="min-h-screen flex items-center justify-center" style="background:#faf5ff"><div class="text-center"><div class="text-5xl anim-bounce mb-4">🧸</div><div class="text-lg font-bold text-purple-300">載入緊...</div></div></div>`;return;}
   let h=S.view==='main'?mainView():settingsView();
   if(S.pwdModal)h+=pwdModalView();
-  if(S.adminPwd)h+=adminPwdView();
+  if(S.pinLogin||S.pinSet)h+=pinModalView();
   if(S.editModal)h+=editModalView();
   if(S.delConfirm)h+=delModalView();
   if(S.noticeEdit)h+=noticeEditView();
@@ -158,12 +162,7 @@ function render(){
 
   if(_fid){
     const el=document.getElementById(_fid);
-    if(el){
-      el.focus();
-      if(typeof _ss==='number'&&el.setSelectionRange){
-        try{el.setSelectionRange(_ss,_se);}catch(e){}
-      }
-    }
+    if(el){el.focus();if(typeof _ss==='number'&&el.setSelectionRange){try{el.setSelectionRange(_ss,_se);}catch(e){}}}
   }
 }
 
@@ -177,6 +176,53 @@ function initMarquee(){
   requestAnimationFrame(()=>{track.classList.add('running');});
 }
 
+/* ── PIN Modal ── */
+function pinModalView(){
+  const isLogin=S.pinLogin;
+  let title,sub;
+  if(isLogin){title='管理員登入';sub='輸入 4 位數 PIN';}
+  else{
+    if(S._pinStep===1){title='設定新 PIN';sub='請輸入 4 位數字';}
+    else{title='確認 PIN';sub='再輸入一次確認';}
+  }
+
+  let dots='';
+  for(let i=0;i<PIN_LEN;i++){
+    const filled=i<S._pin.length;
+    const latest=filled&&i===S._pin.length-1;
+    let cls='w-5 h-5 rounded-full transition-all duration-150 ';
+    if(S._pinErr){cls+='bg-rose-400';}
+    else if(filled){cls+=(latest?'dot-pop ':'');}
+    else{cls+='border-2 border-purple-200';}
+    const style=filled&&!S._pinErr?'background:linear-gradient(135deg,#a855f7,#c084fc)':'';
+    dots+=`<div class="${cls}" style="${style}"></div>`;
+  }
+
+  let h=`<div class="fixed inset-0 z-50 modal-bg flex items-center justify-center p-4">`;
+  h+=`<div class="bg-white w-full max-w-xs rounded-3xl shadow-2xl overflow-hidden ${S._pinErr?'shake-anim':''}">`;
+  // Header
+  h+=`<div class="relative pt-8 pb-4 px-6 text-center" style="background:linear-gradient(135deg,#ede9fe,#faf5ff)">`;
+  h+=`<button data-a="pinClose" class="absolute top-3 right-3 w-8 h-8 rounded-full bg-white bg-opacity-60 text-gray-400 flex items-center justify-center text-sm font-bold active:scale-90 transition-transform">✕</button>`;
+  h+=`<div class="text-3xl mb-1.5">${isLogin?'🔐':'🔑'}</div>`;
+  h+=`<div class="font-bold text-gray-600 text-sm">${title}</div>`;
+  h+=`<div class="text-xs text-purple-300 mt-0.5">${sub}</div>`;
+  h+=`<div class="flex justify-center items-center gap-4 mt-5 mb-2">${dots}</div>`;
+  if(S._pinErr)h+=`<div class="text-rose-400 text-xs font-semibold mt-2">${isLogin?'PIN 錯誤 🙈':'兩次唔一樣，請重新輸入'}</div>`;
+  h+=`</div>`;
+  // Number Pad
+  h+=`<div class="px-6 pt-5 pb-7"><div class="grid grid-cols-3 gap-3">`;
+  for(let n=1;n<=9;n++){
+    h+=`<button data-a="pinDigit" data-d="${n}" class="pin-btn h-14 rounded-2xl bg-purple-50 text-gray-600 font-bold text-xl flex items-center justify-center transition-all duration-100">${n}</button>`;
+  }
+  h+=`<div></div>`;
+  h+=`<button data-a="pinDigit" data-d="0" class="pin-btn h-14 rounded-2xl bg-purple-50 text-gray-600 font-bold text-xl flex items-center justify-center transition-all duration-100">0</button>`;
+  h+=`<button data-a="pinBack" class="pin-btn h-14 rounded-2xl bg-gray-50 text-gray-400 font-bold text-lg flex items-center justify-center transition-all duration-100">⌫</button>`;
+  h+=`</div></div>`;
+  h+=`</div></div>`;
+  return h;
+}
+
+/* ── Main View ── */
 function mainView(){
   let h=`<div class="min-h-screen" style="background:#faf5ff">`;
   h+=`<div class="relative overflow-hidden" style="background:linear-gradient(135deg,#c084fc,#e879f9,#f9a8d4)">`;
@@ -193,24 +239,17 @@ function mainView(){
     h+=`<div class="relative -mt-1" style="background:linear-gradient(135deg,#7c3aed,#9333ea)">`;
     h+=`<div class="flex items-center">`;
     h+=`<div class="shrink-0 flex items-center gap-1.5 px-3 py-2.5 z-10 relative" style="background:linear-gradient(135deg,#7c3aed,#9333ea)"><span class="text-sm">📢</span><span class="text-white text-xs font-bold opacity-80">公告</span><span class="pulse-dot inline-block w-1.5 h-1.5 rounded-full bg-yellow-300"></span><div class="absolute right-0 top-0 bottom-0 w-6" style="background:linear-gradient(to right,#7c3aed,transparent)"></div></div>`;
-    h+=`<div class="marquee-wrap flex-1 py-2.5 pr-3">`;
-    h+=`<div class="marquee-track">`;
+    h+=`<div class="marquee-wrap flex-1 py-2.5 pr-3"><div class="marquee-track">`;
     for(let r=0;r<2;r++){
       an.forEach(n=>{
         const nt=NTYPES.find(t=>t.key===n.type)||NTYPES[2];
-        h+=`<span class="inline-flex items-center gap-1.5 mx-6">`;
-        h+=`<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold" style="background:${nt.pill};color:${nt.txt}">${nt.emoji} ${nt.label}</span>`;
-        h+=`<span class="text-white text-sm font-medium">${esc(n.text)}</span>`;
-        h+=`<span class="text-white text-opacity-30 mx-3">✦</span>`;
-        h+=`</span>`;
+        h+=`<span class="inline-flex items-center gap-1.5 mx-6"><span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold" style="background:${nt.pill};color:${nt.txt}">${nt.emoji} ${nt.label}</span><span class="text-white text-sm font-medium">${esc(n.text)}</span><span class="text-white text-opacity-30 mx-3">✦</span></span>`;
       });
     }
-    h+=`</div></div>`;
-    h+=`</div></div>`;
+    h+=`</div></div></div></div>`;
   }
 
   h+=`<div class="px-4 pb-28 pt-5 max-w-lg mx-auto">`;
-
   const cats={};S.cards.forEach(c=>{const k=c.cat||'其他';if(!cats[k])cats[k]=[];cats[k].push(c);});
   const order=['表單','數據','工具','其他'];
   const sorted=Object.keys(cats).sort((a,b)=>{const ia=order.indexOf(a),ib=order.indexOf(b);return(ia<0?99:ia)-(ib<0?99:ib);});
@@ -235,12 +274,12 @@ function mainView(){
     });
   }
   h+=`</div>`;
-
   h+=`<button data-a="admin" class="fixed bottom-6 right-6 w-14 h-14 rounded-full shadow-2xl flex items-center justify-center text-xl active:scale-90 transition-transform z-40" style="background:linear-gradient(135deg,#c084fc,#e879f9)"><span class="drop-shadow-sm">⚙️</span></button>`;
   h+=`</div>`;
   return h;
 }
 
+/* ── Settings View ── */
 function settingsView(){
   let nl='';
   if(!S.notices.length)nl='<div class="text-center py-6 text-purple-200 text-sm">未有公告 📭</div>';
@@ -271,26 +310,50 @@ function settingsView(){
     cl+=`</div></div>`;
   });
 
+  // PIN status dots
+  let pinDots='';
+  for(let i=0;i<PIN_LEN;i++){
+    if(S.set.pwd){
+      pinDots+=`<div class="w-3.5 h-3.5 rounded-full" style="background:linear-gradient(135deg,#a855f7,#c084fc)"></div>`;
+    }else{
+      pinDots+=`<div class="w-3.5 h-3.5 rounded-full border-2 border-purple-200"></div>`;
+    }
+  }
+
   let h=`<div class="min-h-screen" style="background:#faf5ff">`;
   h+=`<div class="px-5 pt-12 pb-5 flex items-center justify-between" style="background:linear-gradient(135deg,#7c3aed,#a855f7)"><div><div class="text-white font-bold text-lg">⚙️ 設定</div><div class="text-purple-200 text-xs">管理公告、卡片同連結</div></div><button data-a="back" class="bg-white bg-opacity-20 text-white px-4 py-2 rounded-xl text-sm font-semibold active:scale-95 transition-transform">✕ 返回</button></div>`;
 
   h+=`<div class="px-4 py-4 pb-28 max-w-lg mx-auto space-y-4">`;
 
+  // Hub settings
   h+=`<div class="bg-white rounded-3xl p-5 border border-purple-100 shadow-sm fade-in"><div class="font-bold text-gray-600 text-sm mb-3">🏷️ Hub 設定</div><div class="space-y-3">`;
   h+=`<div><label class="text-xs font-bold text-purple-400 mb-1 block">標題</label><input id="hTitle" value="${esc(S.set.title)}" class="w-full border border-purple-100 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-200 focus:border-purple-300 bg-purple-50 bg-opacity-40"></div>`;
   h+=`<div><label class="text-xs font-bold text-purple-400 mb-1 block">副標題</label><input id="hSub" value="${esc(S.set.sub)}" class="w-full border border-purple-100 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-200 focus:border-purple-300 bg-purple-50 bg-opacity-40"></div>`;
-  h+=`<div><label class="text-xs font-bold text-purple-400 mb-1 block">管理員密碼 ${S.set.pwd?'🟢 已設定':'⚪ 未設定'}</label><input id="hPwd" type="password" value="${esc(S.set.pwd)}" placeholder="留空 = 無密碼" class="w-full border border-purple-100 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-200 focus:border-purple-300 bg-purple-50 bg-opacity-40"></div>`;
+  // PIN lock section
+  h+=`<div><label class="text-xs font-bold text-purple-400 mb-2 block">🔐 管理員 PIN</label>`;
+  h+=`<div class="flex items-center gap-3 bg-purple-50 bg-opacity-60 rounded-2xl p-4 border border-purple-100">`;
+  h+=`<div class="flex items-center gap-2">${pinDots}</div>`;
+  h+=`<div class="flex-1 text-xs font-semibold ${S.set.pwd?'text-green-500':'text-gray-400'}">${S.set.pwd?'🟢 已設定':'⚪ 未設定'}</div>`;
+  h+=`<div class="flex items-center gap-2">`;
+  h+=`<button data-a="startPinSet" class="px-4 py-2 rounded-xl text-white text-xs font-bold active:scale-95 transition-transform shadow-sm" style="background:linear-gradient(135deg,#a855f7,#c084fc)">${S.set.pwd?'更改':'設定'}</button>`;
+  if(S.set.pwd)h+=`<button data-a="clearPin" class="px-4 py-2 rounded-xl bg-gray-100 text-gray-400 text-xs font-bold active:scale-95 transition-transform">清除</button>`;
+  h+=`</div></div>`;
+  h+=`<div class="text-xs text-purple-300 mt-1.5">設定後進入設定頁面要輸入 PIN 先入到 🔑</div>`;
+  h+=`</div>`;
   h+=`<button data-a="saveSet" class="w-full text-white font-bold py-2.5 rounded-xl text-sm shadow-md active:scale-95 transition-transform" style="background:linear-gradient(135deg,#a855f7,#c084fc)">💾 儲存設定</button>`;
   h+=`</div></div>`;
 
+  // Notice management
   h+=`<div class="bg-white rounded-3xl p-5 border border-purple-100 shadow-sm fade-in"><div class="flex items-center justify-between mb-4"><div class="font-bold text-gray-600 text-sm">📢 公告管理</div><span class="text-xs bg-purple-50 text-purple-500 px-3 py-1 rounded-lg font-bold">${S.notices.length} 個</span></div>${nl}<button data-a="addN" class="w-full mt-3 text-white font-bold py-3 rounded-xl text-sm shadow-md active:scale-95 transition-transform" style="background:linear-gradient(135deg,#f472b6,#ec4899)">＋ 新增公告</button></div>`;
 
+  // Card management
   h+=`<div class="bg-white rounded-3xl p-5 border border-purple-100 shadow-sm fade-in"><div class="flex items-center justify-between mb-4"><div class="font-bold text-gray-600 text-sm">📱 卡片管理</div><span class="text-xs bg-purple-50 text-purple-500 px-3 py-1 rounded-lg font-bold">${S.cards.length} 個</span></div>${cl}<button data-a="add" class="w-full mt-3 text-white font-bold py-3 rounded-xl text-sm shadow-md active:scale-95 transition-transform" style="background:linear-gradient(135deg,#34d399,#6ee7b7)">＋ 新增卡片</button></div>`;
 
   h+=`</div></div>`;
   return h;
 }
 
+/* ── Edit Modal ── */
 function editModalView(){
   const c=S.editModal;const isNew=!c.id;
   const ep=EMOJIS.map(e=>`<button data-a="emoji" data-e="${e}" class="w-10 h-10 rounded-xl text-xl flex items-center justify-center transition-all ${c.icon===e?'bg-purple-100 ring-2 ring-purple-400 scale-110':'hover:bg-purple-50'}">${e}</button>`).join('');
@@ -314,6 +377,7 @@ function editModalView(){
   return h;
 }
 
+/* ── Notice Edit Modal ── */
 function noticeEditView(){
   const n=S.noticeEdit;const isNew=!n.id;
   const to=NTYPES.map(t=>`<option value="${t.key}" ${n.type===t.key?'selected':''}>${t.emoji} ${t.label}</option>`).join('');
@@ -327,6 +391,7 @@ function noticeEditView(){
   return h;
 }
 
+/* ── Card Password Modal ── */
 function pwdModalView(){
   const{card:c,err}=S.pwdModal;
   let h=`<div class="fixed inset-0 z-50 modal-bg flex items-center justify-center p-6" data-a="closePwd"><div class="bg-white w-full max-w-xs rounded-3xl p-6 shadow-2xl text-center" onclick="event.stopPropagation()">`;
@@ -338,16 +403,7 @@ function pwdModalView(){
   return h;
 }
 
-function adminPwdView(){
-  let h=`<div class="fixed inset-0 z-50 modal-bg flex items-center justify-center p-6" data-a="closeAdm"><div class="bg-white w-full max-w-xs rounded-3xl p-6 shadow-2xl text-center" onclick="event.stopPropagation()">`;
-  h+=`<div class="text-4xl mb-3">🔐</div><div class="font-bold text-gray-600 mb-1">管理員登入</div><div class="text-xs text-purple-300 mb-4">輸入管理員密碼</div>`;
-  h+=`<input id="aPwd" type="password" value="${esc(S._aPwd||'')}" placeholder="密碼" class="w-full border border-purple-100 rounded-xl px-4 py-3 text-sm text-center focus:ring-2 focus:ring-purple-200 mb-1">`;
-  h+=`<div id="aPwdErr" class="text-rose-400 text-xs font-semibold mb-1 hidden">密碼錯誤 🙈</div>`;
-  h+=`<div class="flex gap-3 mt-3"><button data-a="closeAdm" class="flex-1 bg-gray-100 text-gray-400 font-semibold py-2.5 rounded-xl text-sm">取消</button><button data-a="checkAdm" class="flex-1 text-white font-bold py-2.5 rounded-xl text-sm" style="background:linear-gradient(135deg,#7c3aed,#a855f7)">登入</button></div>`;
-  h+=`</div></div>`;
-  return h;
-}
-
+/* ── Delete Modals ── */
 function delModalView(){
   const c=S.delConfirm;
   let h=`<div class="fixed inset-0 z-50 modal-bg flex items-center justify-center p-6" data-a="cancelDel"><div class="bg-white w-full max-w-xs rounded-3xl p-6 shadow-2xl text-center" onclick="event.stopPropagation()">`;
@@ -356,7 +412,6 @@ function delModalView(){
   h+=`</div></div>`;
   return h;
 }
-
 function noticeDelView(){
   const n=S.noticeDel;
   let h=`<div class="fixed inset-0 z-50 modal-bg flex items-center justify-center p-6" data-a="cancelNDel"><div class="bg-white w-full max-w-xs rounded-3xl p-6 shadow-2xl text-center" onclick="event.stopPropagation()">`;
@@ -367,18 +422,19 @@ function noticeDelView(){
   return h;
 }
 
+/* ── Events ── */
 function bindEvents(){
   document.querySelectorAll('[data-a]').forEach(el=>{
     const action=el.dataset.a;
     el.onclick=function(ev){
       if(el._touchHandled){el._touchHandled=false;return;}
-      if(['closeEditBg','closeNBg','closePwd','closeAdm','cancelDel','cancelNDel'].includes(action)){
+      if(['closeEditBg','closeNBg','closePwd','cancelDel','cancelNDel'].includes(action)){
         if(ev.target!==this)return;
       }
       act(action,this.dataset);
     };
     el.addEventListener('touchend',function(ev){
-      if(['checkAdm','checkPwd','saveCard','saveN','saveSet'].includes(action)){
+      if(['checkPwd','saveCard','saveN','saveSet','pinDigit','pinBack','pinClose'].includes(action)){
         ev.preventDefault();
         el._touchHandled=true;
         act(action,el.dataset);
@@ -386,21 +442,85 @@ function bindEvents(){
     });
   });
   const cp=document.getElementById('cPwd');if(cp){cp.onkeydown=e=>{if(e.key==='Enter')act('checkPwd');};setTimeout(()=>cp.focus(),120);}
-  const ap=document.getElementById('aPwd');if(ap){ap.onkeydown=e=>{if(e.key==='Enter')act('checkAdm');};setTimeout(()=>ap.focus(),120);}
 }
 
+/* ── Actions ── */
 function act(a,d={}){
   switch(a){
     case'open':{const c=S.cards.find(x=>x.id===d.id);if(!c)return;if(c.pwd){S._cPwd='';S.pwdModal={card:c,err:false};render();}else{if(c.url)window.open(c.url,'_blank');else toast('⚠️ 未設定連結');}break;}
     case'checkPwd':{const inp=document.getElementById('cPwd');if(inp&&inp.value===S.pwdModal.card.pwd){const u=S.pwdModal.card.url;S._cPwd='';S.pwdModal=null;render();if(u)window.open(u,'_blank');else toast('⚠️ 未設定連結');}else{S.pwdModal.err=true;render();}break;}
     case'closePwd':S._cPwd='';S.pwdModal=null;render();break;
 
-    case'admin':if(S.set.pwd&&!S.admin){S._aPwd='';S.adminPwd=true;render();}else{S.admin=true;S.view='settings';render();}break;
-    case'checkAdm':{const inp=document.getElementById('aPwd');if(inp&&inp.value===S.set.pwd){S.admin=true;S._aPwd='';S.adminPwd=false;S.view='settings';render();}else{const e=document.getElementById('aPwdErr');if(e)e.classList.remove('hidden');}break;}
-    case'closeAdm':S._aPwd='';S.adminPwd=false;render();break;
+    // Admin → PIN pad
+    case'admin':{
+      if(S.set.pwd&&!S.admin){S._pin='';S._pinErr=false;S._pinBusy=false;S.pinLogin=true;render();}
+      else{S.admin=true;S.view='settings';render();}
+      break;
+    }
+
+    // PIN digit
+    case'pinDigit':{
+      if(S._pinBusy)return;
+      if(S._pin.length>=PIN_LEN)return;
+      S._pin+=d.d;
+      S._pinErr=false;
+      render();
+      if(S._pin.length===PIN_LEN){
+        S._pinBusy=true;
+        setTimeout(()=>{
+          if(S.pinLogin){
+            if(S._pin===S.set.pwd){
+              S._pin='';S.pinLogin=false;S._pinBusy=false;
+              S.admin=true;S.view='settings';render();
+            }else{
+              S._pinErr=true;S._pinBusy=true;render();
+              setTimeout(()=>{S._pin='';S._pinErr=false;S._pinBusy=false;render();},700);
+            }
+          }else if(S.pinSet){
+            if(S._pinStep===1){
+              S._pinFirst=S._pin;S._pin='';S._pinStep=2;S._pinBusy=false;render();
+            }else{
+              if(S._pin===S._pinFirst){
+                S.set.pwd=S._pin;
+                S._pin='';S._pinFirst='';S._pinStep=1;S.pinSet=false;S._pinBusy=false;
+                save();toast('✅ PIN 已設定');
+              }else{
+                S._pinErr=true;S._pinBusy=true;render();
+                setTimeout(()=>{S._pin='';S._pinErr=false;S._pinStep=1;S._pinFirst='';S._pinBusy=false;render();},800);
+              }
+            }
+          }
+        },280);
+      }
+      break;
+    }
+    case'pinBack':{
+      if(S._pinBusy)return;
+      if(S._pin.length>0){S._pin=S._pin.slice(0,-1);S._pinErr=false;render();}
+      break;
+    }
+    case'pinClose':{
+      S._pin='';S._pinStep=1;S._pinFirst='';S._pinErr=false;S._pinBusy=false;
+      S.pinLogin=false;S.pinSet=false;render();
+      break;
+    }
+
+    // Settings PIN set/clear
+    case'startPinSet':{
+      S._pin='';S._pinStep=1;S._pinFirst='';S._pinErr=false;S._pinBusy=false;
+      S.pinSet=true;render();break;
+    }
+    case'clearPin':{
+      S.set.pwd='';save();toast('🔓 PIN 已清除');break;
+    }
+
     case'back':S.view='main';render();break;
 
-    case'saveSet':{S.set.title=document.getElementById('hTitle').value.trim()||'Team Hub ✨';S.set.sub=document.getElementById('hSub').value.trim();S.set.pwd=document.getElementById('hPwd').value;save();toast('✅ 設定已儲存');break;}
+    case'saveSet':{
+      S.set.title=document.getElementById('hTitle').value.trim()||'Team Hub ✨';
+      S.set.sub=document.getElementById('hSub').value.trim();
+      save();toast('✅ 設定已儲存');break;
+    }
 
     case'add':S.editModal={id:'',icon:'📝',name:'',desc:'',url:'',pwd:'',cat:'其他',color:'lavender'};render();break;
     case'edit':{const c=S.cards.find(x=>x.id===d.id);if(c)S.editModal={...c};render();break;}
