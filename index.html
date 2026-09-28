@@ -22,7 +22,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 @keyframes marquee{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
 @keyframes shake{0%,100%{transform:translateX(0)}15%,45%,75%{transform:translateX(-10px)}30%,60%,90%{transform:translateX(10px)}}
 @keyframes dotPop{0%{transform:scale(0.5)}50%{transform:scale(1.25)}100%{transform:scale(1)}}
-@keyframes successPulse{0%{transform:scale(1)}50%{transform:scale(1.08)}100%{transform:scale(1)}}
 .fade-in{animation:fadeIn .35s ease-out both}
 .slide-up{animation:slideUp .3s ease-out}
 .float1{animation:float1 4s ease-in-out infinite}
@@ -70,7 +69,7 @@ const NTYPES=[
   {key:'reminder',emoji:'🔔',label:'提醒',bg:'#fffbeb',bdr:'#fbbf24',txt:'#92400e',pill:'#fcd34d'},
   {key:'info',emoji:'💡',label:'Tips',bg:'#eff6ff',bdr:'#60a5fa',txt:'#1e40af',pill:'#93c5fd'}
 ];
-const PIN_LEN=4;
+const PIN_LEN=6;
 
 let S={
   cards:[],notices:[],
@@ -80,7 +79,6 @@ let S={
   editModal:null,pwdModal:null,delConfirm:null,
   noticeEdit:null,noticeDel:null,
   toast:'',
-  // PIN states
   pinLogin:false,
   pinSet:false,
   _pin:'',
@@ -88,16 +86,23 @@ let S={
   _pinFirst:'',
   _pinErr:false,
   _pinBusy:false,
-  // Card password
   _cPwd:''
 };
 
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 
+/* 驗證 PIN 格式：必須係6位數字，唔係就清空 */
+function validatePin(){
+  const re=new RegExp('^\\d{'+PIN_LEN+'}$');
+  if(S.set.pwd && !re.test(S.set.pwd)){
+    S.set.pwd='';
+  }
+}
+
 async function load(){
-  try{const c=localStorage.getItem('hubCfg4');if(c){const d=JSON.parse(c);S.cards=d.cards||[];S.notices=d.notices||[];S.set={...S.set,...d.set};S.loaded=true;S.loading=false;render();}}catch(e){}
-  if(API_URL){try{const r=await fetch(API_URL+'?action=getHubConfig');const j=await r.json();if(j.success&&j.data){S.cards=j.data.cards||[];S.notices=j.data.notices||[];S.set={...S.set,...j.data.set};cache();}}catch(e){console.log('API load skipped',e);}}
+  try{const c=localStorage.getItem('hubCfg4');if(c){const d=JSON.parse(c);S.cards=d.cards||[];S.notices=d.notices||[];S.set={...S.set,...d.set};validatePin();S.loaded=true;S.loading=false;render();}}catch(e){}
+  if(API_URL){try{const r=await fetch(API_URL+'?action=getHubConfig');const j=await r.json();if(j.success&&j.data){S.cards=j.data.cards||[];S.notices=j.data.notices||[];S.set={...S.set,...j.data.set};validatePin();cache();}}catch(e){console.log('API load skipped',e);}}
   S.loaded=true;S.loading=false;render();
 }
 function cache(){try{localStorage.setItem('hubCfg4',JSON.stringify({cards:S.cards,notices:S.notices,set:S.set}));}catch(e){}}
@@ -180,9 +185,9 @@ function initMarquee(){
 function pinModalView(){
   const isLogin=S.pinLogin;
   let title,sub;
-  if(isLogin){title='管理員登入';sub='輸入 4 位數 PIN';}
+  if(isLogin){title='管理員登入';sub='輸入 6 位數 PIN';}
   else{
-    if(S._pinStep===1){title='設定新 PIN';sub='請輸入 4 位數字';}
+    if(S._pinStep===1){title='設定新 PIN';sub='請輸入 6 位數字';}
     else{title='確認 PIN';sub='再輸入一次確認';}
   }
 
@@ -190,7 +195,7 @@ function pinModalView(){
   for(let i=0;i<PIN_LEN;i++){
     const filled=i<S._pin.length;
     const latest=filled&&i===S._pin.length-1;
-    let cls='w-5 h-5 rounded-full transition-all duration-150 ';
+    let cls='w-4 h-4 rounded-full transition-all duration-150 ';
     if(S._pinErr){cls+='bg-rose-400';}
     else if(filled){cls+=(latest?'dot-pop ':'');}
     else{cls+='border-2 border-purple-200';}
@@ -200,16 +205,14 @@ function pinModalView(){
 
   let h=`<div class="fixed inset-0 z-50 modal-bg flex items-center justify-center p-4">`;
   h+=`<div class="bg-white w-full max-w-xs rounded-3xl shadow-2xl overflow-hidden ${S._pinErr?'shake-anim':''}">`;
-  // Header
   h+=`<div class="relative pt-8 pb-4 px-6 text-center" style="background:linear-gradient(135deg,#ede9fe,#faf5ff)">`;
   h+=`<button data-a="pinClose" class="absolute top-3 right-3 w-8 h-8 rounded-full bg-white bg-opacity-60 text-gray-400 flex items-center justify-center text-sm font-bold active:scale-90 transition-transform">✕</button>`;
   h+=`<div class="text-3xl mb-1.5">${isLogin?'🔐':'🔑'}</div>`;
   h+=`<div class="font-bold text-gray-600 text-sm">${title}</div>`;
   h+=`<div class="text-xs text-purple-300 mt-0.5">${sub}</div>`;
-  h+=`<div class="flex justify-center items-center gap-4 mt-5 mb-2">${dots}</div>`;
+  h+=`<div class="flex justify-center items-center gap-3 mt-5 mb-2">${dots}</div>`;
   if(S._pinErr)h+=`<div class="text-rose-400 text-xs font-semibold mt-2">${isLogin?'PIN 錯誤 🙈':'兩次唔一樣，請重新輸入'}</div>`;
   h+=`</div>`;
-  // Number Pad
   h+=`<div class="px-6 pt-5 pb-7"><div class="grid grid-cols-3 gap-3">`;
   for(let n=1;n<=9;n++){
     h+=`<button data-a="pinDigit" data-d="${n}" class="pin-btn h-14 rounded-2xl bg-purple-50 text-gray-600 font-bold text-xl flex items-center justify-center transition-all duration-100">${n}</button>`;
@@ -310,13 +313,12 @@ function settingsView(){
     cl+=`</div></div>`;
   });
 
-  // PIN status dots
   let pinDots='';
   for(let i=0;i<PIN_LEN;i++){
     if(S.set.pwd){
-      pinDots+=`<div class="w-3.5 h-3.5 rounded-full" style="background:linear-gradient(135deg,#a855f7,#c084fc)"></div>`;
+      pinDots+=`<div class="w-3 h-3 rounded-full" style="background:linear-gradient(135deg,#a855f7,#c084fc)"></div>`;
     }else{
-      pinDots+=`<div class="w-3.5 h-3.5 rounded-full border-2 border-purple-200"></div>`;
+      pinDots+=`<div class="w-3 h-3 rounded-full border-2 border-purple-200"></div>`;
     }
   }
 
@@ -325,28 +327,24 @@ function settingsView(){
 
   h+=`<div class="px-4 py-4 pb-28 max-w-lg mx-auto space-y-4">`;
 
-  // Hub settings
   h+=`<div class="bg-white rounded-3xl p-5 border border-purple-100 shadow-sm fade-in"><div class="font-bold text-gray-600 text-sm mb-3">🏷️ Hub 設定</div><div class="space-y-3">`;
   h+=`<div><label class="text-xs font-bold text-purple-400 mb-1 block">標題</label><input id="hTitle" value="${esc(S.set.title)}" class="w-full border border-purple-100 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-200 focus:border-purple-300 bg-purple-50 bg-opacity-40"></div>`;
   h+=`<div><label class="text-xs font-bold text-purple-400 mb-1 block">副標題</label><input id="hSub" value="${esc(S.set.sub)}" class="w-full border border-purple-100 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-200 focus:border-purple-300 bg-purple-50 bg-opacity-40"></div>`;
-  // PIN lock section
-  h+=`<div><label class="text-xs font-bold text-purple-400 mb-2 block">🔐 管理員 PIN</label>`;
+  h+=`<div><label class="text-xs font-bold text-purple-400 mb-2 block">🔐 管理員 PIN（6 位數字）</label>`;
   h+=`<div class="flex items-center gap-3 bg-purple-50 bg-opacity-60 rounded-2xl p-4 border border-purple-100">`;
-  h+=`<div class="flex items-center gap-2">${pinDots}</div>`;
+  h+=`<div class="flex items-center gap-1.5">${pinDots}</div>`;
   h+=`<div class="flex-1 text-xs font-semibold ${S.set.pwd?'text-green-500':'text-gray-400'}">${S.set.pwd?'🟢 已設定':'⚪ 未設定'}</div>`;
   h+=`<div class="flex items-center gap-2">`;
   h+=`<button data-a="startPinSet" class="px-4 py-2 rounded-xl text-white text-xs font-bold active:scale-95 transition-transform shadow-sm" style="background:linear-gradient(135deg,#a855f7,#c084fc)">${S.set.pwd?'更改':'設定'}</button>`;
   if(S.set.pwd)h+=`<button data-a="clearPin" class="px-4 py-2 rounded-xl bg-gray-100 text-gray-400 text-xs font-bold active:scale-95 transition-transform">清除</button>`;
   h+=`</div></div>`;
-  h+=`<div class="text-xs text-purple-300 mt-1.5">設定後進入設定頁面要輸入 PIN 先入到 🔑</div>`;
+  h+=`<div class="text-xs text-purple-300 mt-1.5">設定後進入設定頁面要輸入 6 位 PIN 先入到 🔑</div>`;
   h+=`</div>`;
   h+=`<button data-a="saveSet" class="w-full text-white font-bold py-2.5 rounded-xl text-sm shadow-md active:scale-95 transition-transform" style="background:linear-gradient(135deg,#a855f7,#c084fc)">💾 儲存設定</button>`;
   h+=`</div></div>`;
 
-  // Notice management
   h+=`<div class="bg-white rounded-3xl p-5 border border-purple-100 shadow-sm fade-in"><div class="flex items-center justify-between mb-4"><div class="font-bold text-gray-600 text-sm">📢 公告管理</div><span class="text-xs bg-purple-50 text-purple-500 px-3 py-1 rounded-lg font-bold">${S.notices.length} 個</span></div>${nl}<button data-a="addN" class="w-full mt-3 text-white font-bold py-3 rounded-xl text-sm shadow-md active:scale-95 transition-transform" style="background:linear-gradient(135deg,#f472b6,#ec4899)">＋ 新增公告</button></div>`;
 
-  // Card management
   h+=`<div class="bg-white rounded-3xl p-5 border border-purple-100 shadow-sm fade-in"><div class="flex items-center justify-between mb-4"><div class="font-bold text-gray-600 text-sm">📱 卡片管理</div><span class="text-xs bg-purple-50 text-purple-500 px-3 py-1 rounded-lg font-bold">${S.cards.length} 個</span></div>${cl}<button data-a="add" class="w-full mt-3 text-white font-bold py-3 rounded-xl text-sm shadow-md active:scale-95 transition-transform" style="background:linear-gradient(135deg,#34d399,#6ee7b7)">＋ 新增卡片</button></div>`;
 
   h+=`</div></div>`;
@@ -451,14 +449,12 @@ function act(a,d={}){
     case'checkPwd':{const inp=document.getElementById('cPwd');if(inp&&inp.value===S.pwdModal.card.pwd){const u=S.pwdModal.card.url;S._cPwd='';S.pwdModal=null;render();if(u)window.open(u,'_blank');else toast('⚠️ 未設定連結');}else{S.pwdModal.err=true;render();}break;}
     case'closePwd':S._cPwd='';S.pwdModal=null;render();break;
 
-    // Admin → PIN pad
     case'admin':{
       if(S.set.pwd&&!S.admin){S._pin='';S._pinErr=false;S._pinBusy=false;S.pinLogin=true;render();}
       else{S.admin=true;S.view='settings';render();}
       break;
     }
 
-    // PIN digit
     case'pinDigit':{
       if(S._pinBusy)return;
       if(S._pin.length>=PIN_LEN)return;
@@ -505,7 +501,6 @@ function act(a,d={}){
       break;
     }
 
-    // Settings PIN set/clear
     case'startPinSet':{
       S._pin='';S._pinStep=1;S._pinFirst='';S._pinErr=false;S._pinBusy=false;
       S.pinSet=true;render();break;
