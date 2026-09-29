@@ -22,6 +22,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 @keyframes marquee{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
 @keyframes shake{0%,100%{transform:translateX(0)}15%,45%,75%{transform:translateX(-10px)}30%,60%,90%{transform:translateX(10px)}}
 @keyframes dotPop{0%{transform:scale(0.5)}50%{transform:scale(1.25)}100%{transform:scale(1)}}
+@keyframes swapUp{0%{transform:translateY(0);opacity:1}30%{transform:translateY(-6px);opacity:.7}100%{transform:translateY(0);opacity:1}}
+@keyframes swapDown{0%{transform:translateY(0);opacity:1}30%{transform:translateY(6px);opacity:.7}100%{transform:translateY(0);opacity:1}}
 .fade-in{animation:fadeIn .35s ease-out both}
 .slide-up{animation:slideUp .3s ease-out}
 .float1{animation:float1 4s ease-in-out infinite}
@@ -38,8 +40,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 .marquee-track:hover,.marquee-track:active{animation-play-state:paused}
 .shake-anim{animation:shake .45s ease}
 .dot-pop{animation:dotPop .2s ease-out}
+.swap-up{animation:swapUp .3s ease}
+.swap-down{animation:swapDown .3s ease}
 .pin-btn{touch-action:manipulation;-webkit-user-select:none;user-select:none}
 .pin-btn:active{transform:scale(0.88);background:rgba(168,85,247,0.15)!important}
+.move-btn{touch-action:manipulation;-webkit-user-select:none;user-select:none;transition:transform .1s ease,background .1s ease}
+.move-btn:active{transform:scale(0.85);background:#ddd6fe!important}
 input,select,textarea{font-family:inherit;font-size:16px}
 input:focus,select:focus,textarea:focus{outline:none}
 ::-webkit-scrollbar{width:0;height:0}
@@ -64,6 +70,7 @@ const GRADS={
 };
 const EMOJIS=['📝','📊','📋','📅','🧑‍💼','👤','💰','🎯','📸','⚙️','📆','🏆','📈','💡','🔧','📌','🎨','📱','💼','🗂️','📂','🔗','🏠','📮','🛒','🎫','📖','🔍','✅','🎬','📷','🖥️','🔔','💬','🗺️','🎉','⭐','🚀','🔥','🎪','🌸','🦋','☕','🧸','🎵','🌈','💜','🍰'];
 const CATS=['表單','數據','工具','其他'];
+const CAT_ICONS={'表單':'📝','數據':'📊','工具':'🔧','其他':'📌','Dashboard':'🖥️'};
 const NTYPES=[
   {key:'important',emoji:'📌',label:'重要',bg:'#fff1f2',bdr:'#fb7185',txt:'#be123c',pill:'#fda4af'},
   {key:'reminder',emoji:'🔔',label:'提醒',bg:'#fffbeb',bdr:'#fbbf24',txt:'#92400e',pill:'#fcd34d'},
@@ -86,18 +93,16 @@ let S={
   _pinFirst:'',
   _pinErr:false,
   _pinBusy:false,
-  _cPwd:''
+  _cPwd:'',
+  _lastMoved:null
 };
 
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 
-/* 驗證 PIN 格式：必須係6位數字，唔係就清空 */
 function validatePin(){
   const re=new RegExp('^\\d{'+PIN_LEN+'}$');
-  if(S.set.pwd && !re.test(S.set.pwd)){
-    S.set.pwd='';
-  }
+  if(S.set.pwd && !re.test(S.set.pwd)){S.set.pwd='';}
 }
 
 async function load(){
@@ -169,6 +174,11 @@ function render(){
     const el=document.getElementById(_fid);
     if(el){el.focus();if(typeof _ss==='number'&&el.setSelectionRange){try{el.setSelectionRange(_ss,_se);}catch(e){}}}
   }
+
+  // clear move highlight after animation
+  if(S._lastMoved){
+    setTimeout(()=>{S._lastMoved=null;},350);
+  }
 }
 
 function initMarquee(){
@@ -227,6 +237,8 @@ function pinModalView(){
 
 /* ── Main View ── */
 function mainView(){
+  const visibleCards=S.cards.filter(c=>c.cat!=='Dashboard');
+
   let h=`<div class="min-h-screen" style="background:#faf5ff">`;
   h+=`<div class="relative overflow-hidden" style="background:linear-gradient(135deg,#c084fc,#e879f9,#f9a8d4)">`;
   h+=`<div class="absolute top-4 right-8 w-14 h-14 rounded-full bg-white opacity-10 float1"></div>`;
@@ -253,15 +265,15 @@ function mainView(){
   }
 
   h+=`<div class="px-4 pb-28 pt-5 max-w-lg mx-auto">`;
-  const cats={};S.cards.forEach(c=>{const k=c.cat||'其他';if(!cats[k])cats[k]=[];cats[k].push(c);});
-  const order=['表單','數據','工具','其他'];
+  const cats={};visibleCards.forEach(c=>{const k=c.cat||'其他';if(!cats[k])cats[k]=[];cats[k].push(c);});
+  const order=CATS;
   const sorted=Object.keys(cats).sort((a,b)=>{const ia=order.indexOf(a),ib=order.indexOf(b);return(ia<0?99:ia)-(ib<0?99:ib);});
 
-  if(!S.cards.length&&!an.length){
+  if(!visibleCards.length&&!an.length){
     h+=`<div class="text-center py-20 px-6 fade-in"><div class="text-5xl mb-4">🧸</div><div class="text-purple-300 font-bold mb-2">仲未有任何項目</div><div class="text-purple-200 text-sm">撳右下角 ⚙️ 開始設定啦～</div></div>`;
-  } else if(S.cards.length){
+  } else if(visibleCards.length){
     sorted.forEach(cat=>{
-      const ce=cat==='表單'?'📝':cat==='數據'?'📊':cat==='工具'?'🔧':'📌';
+      const ce=CAT_ICONS[cat]||'📌';
       h+=`<div class="mb-6 fade-in"><div class="text-xs font-bold text-purple-300 uppercase tracking-wider mb-3 px-1">${ce} ${cat}</div><div class="grid grid-cols-2 gap-3">`;
       cats[cat].forEach(c=>{
         const g=(GRADS[c.color]||GRADS.lavender).bg;
@@ -284,6 +296,25 @@ function mainView(){
 
 /* ── Settings View ── */
 function settingsView(){
+  const dbCards=S.cards.filter(c=>c.cat==='Dashboard');
+  let dbHtml='';
+  if(dbCards.length){
+    dbHtml+=`<div class="grid grid-cols-2 gap-3">`;
+    dbCards.forEach(c=>{
+      const g=(GRADS[c.color]||GRADS.lavender).bg;
+      dbHtml+=`<div class="card-tap rounded-3xl p-4 shadow-md cursor-pointer relative overflow-hidden" style="background:${g};min-height:100px" data-a="open" data-id="${c.id}">`;
+      dbHtml+=`<div class="absolute top-0 right-0 w-16 h-16 rounded-full bg-white opacity-10 -translate-y-5 translate-x-5"></div>`;
+      dbHtml+=`<div class="absolute bottom-0 left-0 w-10 h-10 rounded-full bg-white opacity-5 translate-y-4 -translate-x-4"></div>`;
+      dbHtml+=`<div class="relative"><div class="text-2xl mb-1.5 drop-shadow-sm">${c.icon||'🖥️'}</div><div class="text-white font-bold text-sm leading-tight drop-shadow-sm">${esc(c.name)}</div>`;
+      if(c.desc)dbHtml+=`<div class="text-white text-opacity-60 text-xs mt-1 leading-snug">${esc(c.desc)}</div>`;
+      dbHtml+=`</div></div>`;
+    });
+    dbHtml+=`</div>`;
+  }else{
+    dbHtml=`<div class="text-center py-5 text-purple-200 text-sm">未有 Dashboard 卡片 📭<br><span class="text-xs text-purple-200 opacity-60">新增卡片時揀分類「Dashboard」就會出現喺度</span></div>`;
+  }
+
+  /* Notices */
   let nl='';
   if(!S.notices.length)nl='<div class="text-center py-6 text-purple-200 text-sm">未有公告 📭</div>';
   else S.notices.forEach(n=>{
@@ -292,26 +323,63 @@ function settingsView(){
     nl+=`<div class="text-lg shrink-0">${nt.emoji}</div>`;
     nl+=`<div class="flex-1 min-w-0"><div class="font-semibold text-gray-600 text-xs leading-snug" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(n.text)}</div><div class="text-xs text-gray-400 mt-0.5">${n.date||''} · ${nt.label}${n.hidden?' · 🙈 已隱藏':''}</div></div>`;
     nl+=`<div class="flex items-center gap-1 shrink-0">`;
-    nl+=`<button data-a="toggleN" data-id="${n.id}" class="w-8 h-8 rounded-xl ${n.hidden?'bg-gray-100 text-gray-400':'bg-green-50 text-green-500'} flex items-center justify-center text-xs">${n.hidden?'🙈':'👁️'}</button>`;
+    nl+=`<button data-a="toggleN" data-id="${n.id}" class="w-8 h-8 rounded-xl ${n.hidden?'bg-gray-100 text-gray-400':'bg-green-50 text-green-500'} flex items-center justify-center text-xs">
+${n.hidden?'🙈':'👁️'}</button>`;
     nl+=`<button data-a="editN" data-id="${n.id}" class="w-8 h-8 rounded-xl bg-purple-100 text-purple-500 flex items-center justify-center text-xs">✏️</button>`;
     nl+=`<button data-a="delN" data-id="${n.id}" class="w-8 h-8 rounded-xl bg-rose-50 text-rose-400 flex items-center justify-center text-xs">🗑️</button>`;
     nl+=`</div></div>`;
   });
 
+  /* Card management list — grouped by category, move within category */
   let cl='';
-  if(!S.cards.length)cl='<div class="text-center py-6 text-purple-200 text-sm">未有卡片 📭</div>';
-  else S.cards.forEach((c,i)=>{
-    const g=(GRADS[c.color]||GRADS.lavender).bg;
-    cl+=`<div class="flex items-center gap-2.5 bg-purple-50 rounded-2xl p-3 mb-2 border border-purple-100">`;
-    cl+=`<div class="w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0 shadow-sm" style="background:${g}">${c.icon}</div>`;
-    cl+=`<div class="flex-1 min-w-0"><div class="font-bold text-gray-600 text-sm truncate">${esc(c.name)}${c.pwd?' 🔒':''}</div><div class="text-xs text-gray-400 truncate">${c.url||'未設定連結'}</div></div>`;
-    cl+=`<div class="flex items-center gap-1 shrink-0">`;
-    cl+=i>0?`<button data-a="move" data-id="${c.id}" data-d="up" class="w-7 h-7 rounded-lg bg-purple-100 text-purple-400 flex items-center justify-center text-xs">▲</button>`:'<div class="w-7"></div>';
-    cl+=i<S.cards.length-1?`<button data-a="move" data-id="${c.id}" data-d="down" class="w-7 h-7 rounded-lg bg-purple-100 text-purple-400 flex items-center justify-center text-xs">▼</button>`:'<div class="w-7"></div>';
-    cl+=`<button data-a="edit" data-id="${c.id}" class="w-7 h-7 rounded-lg bg-purple-100 text-purple-500 flex items-center justify-center text-xs">✏️</button>`;
-    cl+=`<button data-a="del" data-id="${c.id}" class="w-7 h-7 rounded-lg bg-rose-50 text-rose-400 flex items-center justify-center text-xs">🗑️</button>`;
-    cl+=`</div></div>`;
-  });
+  if(!S.cards.length){
+    cl='<div class="text-center py-6 text-purple-200 text-sm">未有卡片 📭</div>';
+  } else {
+    const grouped={};
+    S.cards.forEach(c=>{const k=c.cat||'其他';if(!grouped[k])grouped[k]=[];grouped[k].push(c);});
+    const allCats=['Dashboard',...CATS];
+    const sortedCats=Object.keys(grouped).sort((a,b)=>{const ia=allCats.indexOf(a),ib=allCats.indexOf(b);return(ia<0?99:ia)-(ib<0?99:ib);});
+
+    sortedCats.forEach(cat=>{
+      const ce=CAT_ICONS[cat]||'📌';
+      const tag=cat==='Dashboard'?'<span class="ml-1.5 text-xs bg-purple-100 text-purple-400 px-2 py-0.5 rounded-lg font-semibold">僅設定可見</span>':'';
+      const catCards=grouped[cat];
+      cl+=`<div class="mb-1"><div class="text-xs font-bold text-purple-300 px-1 pt-2 pb-1.5 flex items-center">${ce} ${cat}${tag}</div>`;
+
+      catCards.forEach((c, catIdx)=>{
+        const g=(GRADS[c.color]||GRADS.lavender).bg;
+        const isFirst=catIdx===0;
+        const isLast=catIdx===catCards.length-1;
+        const onlyOne=catCards.length<=1;
+        const wasMoved=S._lastMoved&&S._lastMoved.id===c.id;
+        const moveAnim=wasMoved?(S._lastMoved.dir==='up'?'swap-up':'swap-down'):'';
+
+        cl+=`<div class="flex items-center gap-2.5 bg-purple-50 rounded-2xl p-3 mb-2 border border-purple-100 ${moveAnim}">`;
+        cl+=`<div class="w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0 shadow-sm" style="background:${g}">${c.icon}</div>`;
+        cl+=`<div class="flex-1 min-w-0"><div class="font-bold text-gray-600 text-sm truncate">${esc(c.name)}${c.pwd?' 🔒':''}</div><div class="text-xs text-gray-400 truncate">${c.url||'未設定連結'}</div></div>`;
+        cl+=`<div class="flex items-center gap-1.5 shrink-0">`;
+
+        /* Move buttons — within same category */
+        if(!onlyOne){
+          if(!isFirst){
+            cl+=`<button data-a="move" data-id="${c.id}" data-d="up" class="move-btn w-9 h-9 rounded-xl bg-purple-100 text-purple-500 flex items-center justify-center text-sm font-bold">▲</button>`;
+          } else {
+            cl+=`<div class="w-9"></div>`;
+          }
+          if(!isLast){
+            cl+=`<button data-a="move" data-id="${c.id}" data-d="down" class="move-btn w-9 h-9 rounded-xl bg-purple-100 text-purple-500 flex items-center justify-center text-sm font-bold">▼</button>`;
+          } else {
+            cl+=`<div class="w-9"></div>`;
+          }
+        }
+
+        cl+=`<button data-a="edit" data-id="${c.id}" class="move-btn w-9 h-9 rounded-xl bg-purple-100 text-purple-500 flex items-center justify-center text-sm">✏️</button>`;
+        cl+=`<button data-a="del" data-id="${c.id}" class="move-btn w-9 h-9 rounded-xl bg-rose-50 text-rose-400 flex items-center justify-center text-sm">🗑️</button>`;
+        cl+=`</div></div>`;
+      });
+      cl+=`</div>`;
+    });
+  }
 
   let pinDots='';
   for(let i=0;i<PIN_LEN;i++){
@@ -326,6 +394,9 @@ function settingsView(){
   h+=`<div class="px-5 pt-12 pb-5 flex items-center justify-between" style="background:linear-gradient(135deg,#7c3aed,#a855f7)"><div><div class="text-white font-bold text-lg">⚙️ 設定</div><div class="text-purple-200 text-xs">管理公告、卡片同連結</div></div><button data-a="back" class="bg-white bg-opacity-20 text-white px-4 py-2 rounded-xl text-sm font-semibold active:scale-95 transition-transform">✕ 返回</button></div>`;
 
   h+=`<div class="px-4 py-4 pb-28 max-w-lg mx-auto space-y-4">`;
+
+  /* Dashboard shortcut section */
+  h+=`<div class="bg-white rounded-3xl p-5 border border-purple-100 shadow-sm fade-in"><div class="flex items-center justify-between mb-4"><div class="font-bold text-gray-600 text-sm">🖥️ Dashboard 捷徑</div><span class="text-xs bg-purple-50 text-purple-500 px-3 py-1 rounded-lg font-bold">${dbCards.length} 個</span></div>${dbHtml}</div>`;
 
   h+=`<div class="bg-white rounded-3xl p-5 border border-purple-100 shadow-sm fade-in"><div class="font-bold text-gray-600 text-sm mb-3">🏷️ Hub 設定</div><div class="space-y-3">`;
   h+=`<div><label class="text-xs font-bold text-purple-400 mb-1 block">標題</label><input id="hTitle" value="${esc(S.set.title)}" class="w-full border border-purple-100 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-200 focus:border-purple-300 bg-purple-50 bg-opacity-40"></div>`;
@@ -356,7 +427,8 @@ function editModalView(){
   const c=S.editModal;const isNew=!c.id;
   const ep=EMOJIS.map(e=>`<button data-a="emoji" data-e="${e}" class="w-10 h-10 rounded-xl text-xl flex items-center justify-center transition-all ${c.icon===e?'bg-purple-100 ring-2 ring-purple-400 scale-110':'hover:bg-purple-50'}">${e}</button>`).join('');
   const cp=Object.entries(GRADS).map(([k,v])=>`<button data-a="color" data-c="${k}" class="w-10 h-10 rounded-xl shadow-sm transition-all ${c.color===k?'ring-2 ring-offset-2 ring-purple-500 scale-110':''}" style="background:${v.bg}" title="${v.l}"></button>`).join('');
-  const co=CATS.map(ct=>`<option value="${ct}" ${c.cat===ct?'selected':''}>${ct}</option>`).join('');
+  const allCats=['Dashboard',...CATS];
+  const co=allCats.map(ct=>`<option value="${ct}" ${c.cat===ct?'selected':''}>${ct==='Dashboard'?'🖥️ Dashboard（僅設定可見）':(CAT_ICONS[ct]||'📌')+' '+ct}</option>`).join('');
   const pg=(GRADS[c.color]||GRADS.lavender).bg;
 
   let h=`<div class="fixed inset-0 z-50 modal-bg flex items-end sm:items-center justify-center" data-a="closeEditBg"><div class="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl max-h-screen overflow-y-auto slide-up" onclick="event.stopPropagation()">`;
@@ -365,10 +437,10 @@ function editModalView(){
   h+=`<div class="flex justify-center"><div class="w-28 rounded-3xl shadow-lg flex flex-col items-center justify-center py-5 relative overflow-hidden" style="background:${pg}"><div class="absolute top-0 right-0 w-12 h-12 rounded-full bg-white opacity-10 -translate-y-3 translate-x-3"></div><div class="relative text-3xl mb-1">${c.icon||'📱'}</div><div class="text-white font-bold text-xs relative">${esc(c.name)||'預覽'}</div></div></div>`;
   h+=`<div><label class="text-xs font-bold text-purple-400 mb-2 block">圖示</label><div class="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto rounded-xl bg-purple-50 bg-opacity-40 p-2">${ep}</div></div>`;
   h+=`<div><label class="text-xs font-bold text-purple-400 mb-2 block">顏色</label><div class="flex flex-wrap gap-2.5">${cp}</div></div>`;
-  h+=`<div><label class="text-xs font-bold text-purple-400 mb-1 block">名稱 *</label><input id="eName" value="${esc(c.name||'')}" placeholder="例如：Daily Report" class="w-full border border-purple-100 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-200 bg-purple-50 bg-opacity-40"></div>`;
+  h+=`<div><label class="text-xs font-bold text-purple-400 mb-1 block">分類</label><select id="eCat" class="w-full border border-purple-100 rounded-xl px-4 py-2.5 text-sm bg-white focus:ring-2 focus:ring-purple-200">${co}</select><div class="text-xs text-purple-300 mt-1">揀「Dashboard」嘅卡片只會喺設定入面出現，唔會顯示喺主頁 🔒</div></div>`;
+  h+=`<div><label class="text-xs font-bold text-purple-400 mb-1 block">名稱 *</label><input id="eName" value="${esc(c.name||'')}" placeholder="例如：Sales Dashboard" class="w-full border border-purple-100 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-200 bg-purple-50 bg-opacity-40"></div>`;
   h+=`<div><label class="text-xs font-bold text-purple-400 mb-1 block">描述（選填）</label><input id="eDesc" value="${esc(c.desc||'')}" placeholder="簡單描述" class="w-full border border-purple-100 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-200 bg-purple-50 bg-opacity-40"></div>`;
   h+=`<div><label class="text-xs font-bold text-purple-400 mb-1 block">連結 URL *</label><input id="eUrl" value="${esc(c.url||'')}" placeholder="https://..." class="w-full border border-purple-100 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-200 bg-purple-50 bg-opacity-40"></div>`;
-  h+=`<div><label class="text-xs font-bold text-purple-400 mb-1 block">分類</label><select id="eCat" class="w-full border border-purple-100 rounded-xl px-4 py-2.5 text-sm bg-white focus:ring-2 focus:ring-purple-200">${co}</select></div>`;
   h+=`<div><label class="text-xs font-bold text-purple-400 mb-1 block">密碼保護（選填）</label><input id="ePwd" type="password" value="${esc(c.pwd||'')}" placeholder="留空 = 唔設密碼" class="w-full border border-purple-100 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-200 bg-purple-50 bg-opacity-40"><div class="text-xs text-purple-300 mt-1">設咗密碼，撳卡片時要輸入先入到 🔑</div></div>`;
   h+=`<div class="flex gap-3 pt-2 pb-6"><button data-a="closeEdit" class="flex-1 bg-gray-100 text-gray-400 font-semibold py-3 rounded-xl text-sm">取消</button><button data-a="saveCard" class="flex-1 text-white font-bold py-3 rounded-xl text-sm shadow-md active:scale-95 transition-transform" style="background:linear-gradient(135deg,#a855f7,#c084fc)">💾 儲存</button></div>`;
   h+=`</div></div></div>`;
@@ -432,7 +504,7 @@ function bindEvents(){
       act(action,this.dataset);
     };
     el.addEventListener('touchend',function(ev){
-      if(['checkPwd','saveCard','saveN','saveSet','pinDigit','pinBack','pinClose'].includes(action)){
+      if(['checkPwd','saveCard','saveN','saveSet','pinDigit','pinBack','pinClose','move'].includes(action)){
         ev.preventDefault();
         el._touchHandled=true;
         act(action,el.dataset);
@@ -517,12 +589,40 @@ function act(a,d={}){
       save();toast('✅ 設定已儲存');break;
     }
 
-    case'add':S.editModal={id:'',icon:'📝',name:'',desc:'',url:'',pwd:'',cat:'其他',color:'lavender'};render();break;
+    case'add':S.editModal={id:'',icon:'📊',name:'',desc:'',url:'',pwd:'',cat:'其他',color:'lavender'};render();break;
     case'edit':{const c=S.cards.find(x=>x.id===d.id);if(c)S.editModal={...c};render();break;}
     case'del':{const c=S.cards.find(x=>x.id===d.id);if(c)S.delConfirm={id:c.id,name:c.name,icon:c.icon};render();break;}
     case'confirmDel':if(S.delConfirm){S.cards=S.cards.filter(c=>c.id!==S.delConfirm.id);S.delConfirm=null;save();toast('🗑️ 已刪除');}break;
     case'cancelDel':S.delConfirm=null;render();break;
-    case'move':{const i=S.cards.findIndex(c=>c.id===d.id);if(i<0)return;if(d.d==='up'&&i>0)[S.cards[i],S.cards[i-1]]=[S.cards[i-1],S.cards[i]];if(d.d==='down'&&i<S.cards.length-1)[S.cards[i],S.cards[i+1]]=[S.cards[i+1],S.cards[i]];save();render();break;}
+
+    case'move':{
+      const card=S.cards.find(c=>c.id===d.id);
+      if(!card)return;
+      const cat=card.cat||'其他';
+      // Get cards in same category, preserving their order in S.cards
+      const sameCat=S.cards.filter(c=>(c.cat||'其他')===cat);
+      const catIdx=sameCat.findIndex(c=>c.id===d.id);
+
+      if(d.d==='up' && catIdx>0){
+        const prevCard=sameCat[catIdx-1];
+        const gi=S.cards.indexOf(card);
+        const gpi=S.cards.indexOf(prevCard);
+        S.cards[gi]=prevCard;
+        S.cards[gpi]=card;
+        S._lastMoved={id:card.id,dir:'up'};
+      }
+      if(d.d==='down' && catIdx<sameCat.length-1){
+        const nextCard=sameCat[catIdx+1];
+        const gi=S.cards.indexOf(card);
+        const gni=S.cards.indexOf(nextCard);
+        S.cards[gi]=nextCard;
+        S.cards[gni]=card;
+        S._lastMoved={id:card.id,dir:'down'};
+      }
+      save();render();
+      break;
+    }
+
     case'emoji':if(S.editModal){S.editModal.icon=d.e;render();}break;
     case'color':if(S.editModal){S.editModal.color=d.c;render();}break;
     case'saveCard':{const n=document.getElementById('eName').value.trim();const ds=document.getElementById('eDesc').value.trim();const u=document.getElementById('eUrl').value.trim();const ct=document.getElementById('eCat').value;const pw=document.getElementById('ePwd').value;if(!n){toast('⚠️ 請輸入名稱');return;}const cd={...S.editModal,name:n,desc:ds,url:u,cat:ct,pwd:pw};if(cd.id){S.cards=S.cards.map(c=>c.id===cd.id?cd:c);}else{cd.id=Date.now().toString();S.cards.push(cd);}S.editModal=null;save();toast('✅ 已儲存');break;}
